@@ -1,0 +1,17 @@
+node_modules/
+dist/
+src/generated/
+.DS_Store
+*.log
+
+# Source documents are never committed
+*.pdf
+*.docx
+*.doc
+
+# Tool caches and local secrets are never committed
+.wrangler/
+**/.wrangler/
+.dev.vars
+.env*
+*.dotx

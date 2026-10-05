@@ -1,0 +1,112 @@
+assumption,month,model,actual
+"ex ante: market rates, flat energy",0,5.2,5.2
+"ex ante: market rates, flat energy",1,5.122194651206366,5.3
+"ex ante: market rates, flat energy",2,4.777403066248334,5.6
+"ex ante: market rates, flat energy",3,4.70323749394246,6.2
+"ex ante: market rates, flat energy",4,4.45048247642572,7.8
+"ex ante: market rates, flat energy",5,4.377494372351774,8.1
+"ex ante: market rates, flat energy",6,4.302981205364431,8.8
+"ex ante: market rates, flat energy",7,4.172271374932579,9.6
+"ex ante: market rates, flat energy",8,3.9127166937638775,9.8
+"ex ante: market rates, flat energy",9,3.7639994167870077,10.1
+"ex ante: market rates, flat energy",10,3.5677433559913396,10.9
+"ex ante: market rates, flat energy",11,2.9679404720519993,11.5
+"ex ante: market rates, flat energy",12,2.6006590234808873,11.1
+"ex ante: market rates, flat energy",13,2.4863835462661195,10.4
+"ex ante: market rates, flat energy",14,2.3812735118186517,10
+"ex ante: market rates, flat energy",15,2.284612516989061,9.9
+"ex ante: market rates, flat energy",16,2.1957396219095116,8.3
+"ex ante: market rates, flat energy",17,2.114045071675258,8.1
+"ex ante: market rates, flat energy",18,2.0389663475858173,7.1
+"ex ante: market rates, flat energy",19,1.969984522573449,6.4
+"ex ante: market rates, flat energy",20,1.9066208973995076,6.1
+"ex ante: market rates, flat energy",21,1.848433896001937,5.9
+"ex ante: market rates, flat energy",22,1.7950162000411054,5
+"ex ante: market rates, flat energy",23,1.7459921042269904,3.6
+"ex ante: market rates, flat energy",24,1.7010150754284294,3.1
+"ex ante: market rates, flat energy",25,1.659765499873638,3.4
+"ex ante: market rates, flat energy",26,1.6219486039590394,3.1
+"ex ante: market rates, flat energy",27,1.587292535298296,2.8
+"ex ante: market rates, flat energy",28,1.5555465916724824,2.6
+"ex ante: market rates, flat energy",29,1.5264795864921803,2.6
+"ex ante: market rates, flat energy",30,1.4998783402588998,2.7
+"ex ante: market rates, flat energy",31,1.4755462672164015,2.6
+"ex ante: market rates, flat energy",32,1.453301902661071,2.8
+"ex ante: market rates, flat energy",33,1.4329775908094353,2.4
+"ex ante: market rates, flat energy",34,1.414418440504968,2.1
+"ex ante: market rates, flat energy",35,1.397481371955931,2.3
+"ex ante: market rates, flat energy",36,1.3820342341637744,2.5
+"actual rates, flat energy",0,5.2,5.2
+"actual rates, flat energy",1,5.122194651206366,5.3
+"actual rates, flat energy",2,4.777403066248334,5.6
+"actual rates, flat energy",3,4.70323749394246,6.2
+"actual rates, flat energy",4,4.45048247642572,7.8
+"actual rates, flat energy",5,4.377494372351774,8.1
+"actual rates, flat energy",6,4.302981205364431,8.8
+"actual rates, flat energy",7,4.172271374932579,9.6
+"actual rates, flat energy",8,3.9127166937638775,9.8
+"actual rates, flat energy",9,3.7638952677410513,10.1
+"actual rates, flat energy",10,3.567336477835701,10.9
+"actual rates, flat energy",11,2.966897481376131,11.5
+"actual rates, flat energy",12,2.598524479711233,11.1
+"actual rates, flat energy",13,2.4825958204216967,10.4
+"actual rates, flat energy",14,2.375070918585217,10
+"actual rates, flat energy",15,2.2752128575321007,9.9
+"actual rates, flat energy",16,2.182345504696458,8.3
+"actual rates, flat energy",17,2.09574178092565,8.1
+"actual rates, flat energy",18,2.0148403300358377,7.1
+"actual rates, flat energy",19,1.9391788205404268,6.4
+"actual rates, flat energy",20,1.8682784302171336,6.1
+"actual rates, flat energy",21,1.8017515068289698,5.9
+"actual rates, flat energy",22,1.7392415590346,5
+"actual rates, flat energy",23,1.6803673529130103,3.6
+"actual rates, flat energy",24,1.6248312109207566,3.1
+"actual rates, flat energy",25,1.5724116663475038,3.4
+"actual rates, flat energy",26,1.5229032444252038,3.1
+"actual rates, flat energy",27,1.4761152628160308,2.8
+"actual rates, flat energy",28,1.431870723489143,2.6
+"actual rates, flat energy",29,1.3900052889803238,2.6
+"actual rates, flat energy",30,1.3503663365669416,2.7
+"actual rates, flat energy",31,1.3128120843876272,2.6
+"actual rates, flat energy",32,1.277262858517789,2.8
+"actual rates, flat energy",33,1.2436434133295513,2.4
+"actual rates, flat energy",34,1.2118291754298554,2.1
+"actual rates, flat energy",35,1.1817565220868442,2.3
+"actual rates, flat energy",36,1.153417260215114,2.5
+"actual rates, realised energy",0,5.2,5.2
+"actual rates, realised energy",1,5.184138351145089,5.3
+"actual rates, realised energy",2,5.542653750739047,5.6
+"actual rates, realised energy",3,5.842443576871371,6.2
+"actual rates, realised energy",4,7.157259214504406,7.8
+"actual rates, realised energy",5,6.922415701019029,8.1
+"actual rates, realised energy",6,7.3065980269762205,8.8
+"actual rates, realised energy",7,7.839304990510139,9.6
+"actual rates, realised energy",8,7.756463242777454,9.8
+"actual rates, realised energy",9,7.834088963103213,10.1
+"actual rates, realised energy",10,8.180565823786715,10.9
+"actual rates, realised energy",11,8.259691873138326,11.5
+"actual rates, realised energy",12,7.843260667619111,11.1
+"actual rates, realised energy",13,7.1065382445287835,10.4
+"actual rates, realised energy",14,6.597309990761501,10
+"actual rates, realised energy",15,6.133140160966859,9.9
+"actual rates, realised energy",16,4.596187620301522,8.3
+"actual rates, realised energy",17,4.570942430503576,8.1
+"actual rates, realised energy",18,3.9124908544722286,7.1
+"actual rates, realised energy",19,3.3023564520862356,6.4
+"actual rates, realised energy",20,3.0377875696819476,6.1
+"actual rates, realised energy",21,3.063062841854595,5.9
+"actual rates, realised energy",22,2.713588666227995,5
+"actual rates, realised energy",23,1.9801965540523567,3.6
+"actual rates, realised energy",24,1.757533750743643,3.1
+"actual rates, realised energy",25,1.9491726440534336,3.4
+"actual rates, realised energy",26,1.7508934828795442,3.1
+"actual rates, realised energy",27,1.822689397588863,2.8
+"actual rates, realised energy",28,1.8830094340100998,2.6
+"actual rates, realised energy",29,1.8915217571322265,2.6
+"actual rates, realised energy",30,1.9251251220737158,2.7
+"actual rates, realised energy",31,1.8233769395320794,2.6
+"actual rates, realised energy",32,1.9215474610233525,2.8
+"actual rates, realised energy",33,1.480345694418876,2.4
+"actual rates, realised energy",34,1.125916068431406,2.1
+"actual rates, realised energy",35,1.1782927514959363,2.3
+"actual rates, realised energy",36,1.3093945122931125,2.5

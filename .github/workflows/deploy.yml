@@ -1,0 +1,100 @@
+name: Build and deploy
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '17 * * * *'   # refresh the data snapshot every hour
+  workflow_dispatch:
+
+# Least privilege: jobs read the repository; only the Pages deployment gets write permissions.
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: npm
+      - name: Refuse documents (.pdf, .docx) in the repository
+        run: "! git ls-files | grep -iE '\\.(pdf|docx?|dotx)$'"
+      - run: npm ci
+      - name: Tests (model, ledger and reproduction of the paper's core results)
+        run: npm test
+      - name: Refresh the data snapshot (sources that fail keep their last deployed copy, with a warning)
+        run: npm run snapshot
+      - run: npm run build
+      - name: Browser test of the built application (every page, strict CSP, in-browser reproduction)
+        run: |
+          npx --no-install playwright-core install --with-deps chromium
+          npm run test:e2e
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: dist
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: site
+          path: dist
+          retention-days: 1
+
+  paper:
+    # On every change of the code: recompute every published result of the paper from the archived data
+    # and require it to equal paper/results-2026-10-04.json (about ten minutes).
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: python3 -m pip install --quiet numpy
+      - run: npm run test:full
+
+  pages:
+    needs: [build, paper]
+    if: always() && needs.build.result == 'success' && (needs.paper.result == 'success' || needs.paper.result == 'skipped')
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
+
+  cloudflare:
+    # Cloudflare Pages mirror, with the Pages function that serves the refresh worker's snapshot.
+    needs: [build, paper]
+    if: always() && needs.build.result == 'success' && (needs.paper.result == 'success' || needs.paper.result == 'skipped')
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: site
+          path: dist
+      - name: Deploy dist with the functions/ folder
+        id: deploy
+        if: env.CLOUDFLARE_API_TOKEN != ''
+        run: npx --yes wrangler@4.147.0 pages deploy dist --project-name=phoenixeconomics --branch=main
+        continue-on-error: true
+      - name: Report a failed mirror deployment
+        if: steps.deploy.outcome == 'failure'
+        run: |
+          echo "::warning title=Cloudflare Pages::The mirror deployment failed; GitHub Pages is up to date."
+          echo "Cloudflare Pages deployment failed in this run." >> "$GITHUB_STEP_SUMMARY"

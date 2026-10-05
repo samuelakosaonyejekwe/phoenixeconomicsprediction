@@ -1,0 +1,10 @@
+{
+  "primary": "https://samuelakosaonyejekwe.github.io/phoenixeconomicsprediction/",
+  "mirrors": [
+    "https://samuelakosaonyejekwe.github.io/phoenixeconomicsprediction/",
+    "https://phoenixeconomics.pages.dev/"
+  ],
+  "dataEndpoints": [
+    "https://phoenix-refresh.flame-in-freefall.workers.dev/snapshot.json"
+  ]
+}

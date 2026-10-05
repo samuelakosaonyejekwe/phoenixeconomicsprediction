@@ -1,0 +1,12 @@
+# Phoenix data refresh worker (deploy: npm run deploy:worker)
+name = "phoenix-refresh"
+main = "refresh-worker.js"
+compatibility_date = "2025-06-01"
+workers_dev = true
+
+[triggers]
+crons = ["*/10 * * * *"]
+
+[[kv_namespaces]]
+binding = "DATA"
+id = "1300d69f018743178d1b60b74b087684"

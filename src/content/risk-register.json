@@ -1,0 +1,447 @@
+{
+ "source": "Phoenix Economics Solutions, §11 and Table 20",
+ "intro": "The analysis is designed to make every assumption explicit and testable. Table 20 lists the methodological risks a framework of this kind faces and how each is treated: removed by the method, or bounded — measured, bounded and disclosed, with the reason it cannot be removed today and the step that resolves it. No risk is left without either a removal or a named resolution.",
+ "rows": [
+  {
+   "n": 1,
+   "risk": "Policy endogeneity biases the Phillips slope",
+   "treatment": "IV with lagged gap and world gap (F = 500); two-way fixed effects; slope 0.12–0.19 across estimators. The instruments are not provably exogenous to global supply shocks, so sensitivity extends to 0.25",
+   "status": "Bounded",
+   "where": "§5.1, §7.4",
+   "resolution": "Re-estimated with every annual release; κ up to 0.25 already in the stress tests"
+  },
+  {
+   "n": 2,
+   "risk": "Output gaps and scenarios use later data",
+   "treatment": "Real-time test on IMF vintages; the 2021 scenario uses only what was published by 31 December 2021. Financial accounts are revised and their latest release is used",
+   "status": "Bounded",
+   "where": "§5.2, §7.2",
+   "resolution": "From now on every release is archived with its vintage, so first releases become available"
+  },
+  {
+   "n": 3,
+   "risk": "Unfair out-of-sample benchmark",
+   "treatment": "Benchmarks given the same energy information",
+   "status": "Removed",
+   "where": "§5.2",
+   "resolution": "—"
+  },
+  {
+   "n": 4,
+   "risk": "Fragile energy pass-through",
+   "treatment": "0.090 (IV) against 0.019 (two-way FE); real-time error differs by at most 0.07 pp; both in the stress tests",
+   "status": "Bounded",
+   "where": "§5.1–5.2, §7.7",
+   "resolution": "Re-estimated each year; both values carried in the stress tests"
+  },
+  {
+   "n": 5,
+   "risk": "Short-panel bias",
+   "treatment": "Half-panel jackknife: estimates move by less than 0.02",
+   "status": "Removed",
+   "where": "§5.1",
+   "resolution": "—"
+  },
+  {
+   "n": 6,
+   "risk": "Overlapping annual averages",
+   "treatment": "December rates, non-overlapping; two-way clustered errors",
+   "status": "Removed",
+   "where": "§5.1",
+   "resolution": "—"
+  },
+  {
+   "n": 7,
+   "risk": "Monthly conversion exact only for constant inputs",
+   "treatment": "Difference measured (0.39 pp mean, 0.90 pp 90th percentile); timing convention disclosed",
+   "status": "Bounded",
+   "where": "§4.9",
+   "resolution": "Estimation on monthly data once a monthly output gap is published"
+  },
+  {
+   "n": 8,
+   "risk": "Equal persistence imposed",
+   "treatment": "F test of economy-specific speeds does not reject (p=0.82; wild cluster bootstrap by year 0.87)",
+   "status": "Removed",
+   "where": "§3.6",
+   "resolution": "—"
+  },
+  {
+   "n": 9,
+   "risk": "Implausible country Okun values",
+   "treatment": "Pooled value with interval 2.53–3.44 used; country values reported only",
+   "status": "Removed",
+   "where": "§3.5",
+   "resolution": "—"
+  },
+  {
+   "n": 10,
+   "risk": "Model selection on the test sample",
+   "treatment": "The 2001–2017 hold-out was computed after the specification was chosen; the recent period had been examined; all variants reported for both",
+   "status": "Bounded",
+   "where": "§6.1, Table 8",
+   "resolution": "Any future change of specification is registered in the audit ledger before it is tested (§9.4)"
+  },
+  {
+   "n": 11,
+   "risk": "Exclusion window chosen after seeing results",
+   "treatment": "No window excluded; scores by year",
+   "status": "Removed",
+   "where": "§6.3, Figure 3",
+   "resolution": "—"
+  },
+  {
+   "n": 12,
+   "risk": "Overstated significance of forecast gains",
+   "treatment": "Cross-sectional mean loss with Newey–West variance and the Harvey–Leybourne–Newbold small-sample correction; gains not significant",
+   "status": "Removed",
+   "where": "§6.2–6.3",
+   "resolution": "—"
+  },
+  {
+   "n": 13,
+   "risk": "Benchmark frequency uses hindsight",
+   "treatment": "Real-time historical frequency",
+   "status": "Removed",
+   "where": "§6.2",
+   "resolution": "—"
+  },
+  {
+   "n": 14,
+   "risk": "Short sample dominated by one episode",
+   "treatment": "2001–2026; hold-out and recent periods reported separately",
+   "status": "Removed",
+   "where": "Table 7",
+   "resolution": "—"
+  },
+  {
+   "n": 15,
+   "risk": "Look-ahead in energy weights",
+   "treatment": "Weights of the year of each origin and scenario",
+   "status": "Removed",
+   "where": "§6.1, §4.9",
+   "resolution": "—"
+  },
+  {
+   "n": 16,
+   "risk": "Energy drift inflated by 2021–22",
+   "treatment": "Random walk by default; drift variant worse in the hold-out. Futures prices are not in the public sources used",
+   "status": "Bounded",
+   "where": "§4.9, Table 8",
+   "resolution": "Futures-based path added if an official public source publishes energy futures; random walk stays the default"
+  },
+  {
+   "n": 17,
+   "risk": "Gaussian energy shocks",
+   "treatment": "Student-t shocks with estimated tails; Gaussian gives practically the same score",
+   "status": "Removed",
+   "where": "§6.1, Table 8",
+   "resolution": "—"
+  },
+  {
+   "n": 18,
+   "risk": "Untested nowcast gain",
+   "treatment": "Diebold–Mariano: p=0.02 (36 months), 0.08 (120 months)",
+   "status": "Removed",
+   "where": "§3.7",
+   "resolution": "—"
+  },
+  {
+   "n": 19,
+   "risk": "Exchange-rate nowcast applied to energy",
+   "treatment": "Exchange-rate part kept in core",
+   "status": "Removed",
+   "where": "§3.7",
+   "resolution": "—"
+  },
+  {
+   "n": 20,
+   "risk": "Weak monetary transmission in the model",
+   "treatment": "IS rate effect not identified in EU data; stance channel calibrated to the ECB estimate double-counts (error 3.14 → 3.60); equivalences use the ECB elasticity",
+   "status": "Bounded",
+   "where": "§5.3, §7.8",
+   "resolution": "Re-estimated as data after the 2022–2023 tightening accumulate"
+  },
+  {
+   "n": 21,
+   "risk": "US output-gap dynamics",
+   "treatment": "Persistence estimated on the euro area; rate effect not identifiable, kept from the literature and drawn 0–0.1",
+   "status": "Bounded",
+   "where": "§5.3, §7.7",
+   "resolution": "Literature range drawn in the stress tests; re-estimated when a US real-time gap series is archived"
+  },
+  {
+   "n": 22,
+   "risk": "Contested corporate spending rate",
+   "treatment": "To be measured; drawn 0.05–0.3; measured by the firm arm",
+   "status": "Bounded",
+   "where": "§5.4, §10",
+   "resolution": "Measured by the firm arm of the trial (§10.2)"
+  },
+  {
+   "n": 23,
+   "risk": "Wallet spending from one setting",
+   "treatment": "Second independent source (Italy, MPC 0.48) agrees",
+   "status": "Removed",
+   "where": "§5.4",
+   "resolution": "—"
+  },
+  {
+   "n": 24,
+   "risk": "Government spending rate asserted",
+   "treatment": "0.1 and 0.2 reported; drawn 0–0.2",
+   "status": "Bounded",
+   "where": "§7.4, §7.7",
+   "resolution": "Set by the fiscal rules of each participating government; 0.1 and 0.2 reported"
+  },
+  {
+   "n": 25,
+   "risk": "Output gap frozen at an annual value",
+   "treatment": "Monthly unemployment surprise × Okun coefficient",
+   "status": "Removed",
+   "where": "§3.5",
+   "resolution": "—"
+  },
+  {
+   "n": 26,
+   "risk": "Measurement and model circular",
+   "treatment": "Measurement from deposits, without behavioural parameters",
+   "status": "Removed",
+   "where": "§3.2",
+   "resolution": "—"
+  },
+  {
+   "n": 27,
+   "risk": "Crude liquid share; nominal baseline",
+   "treatment": "Excess deposits against a pace held as a share of GDP; idle part reported. Time deposits counted because redeemable within months",
+   "status": "Bounded",
+   "where": "§3.2",
+   "resolution": "Idle part reported separately; time deposits tracked in every release"
+  },
+  {
+   "n": 28,
+   "risk": "No evidence that excess stocks cause harm",
+   "treatment": "Not shown; the historical threshold limits engagement to exceptional stocks; the value is an explicit weight ω_S. Cannot be removed: no EU episode separately identifies harm from overhangs",
+   "status": "Bounded",
+   "where": "§7.6",
+   "resolution": "Measured in the stepped-wedge rollout (§10.4); until then ω_S is a declared policy weight with a full frontier"
+  },
+  {
+   "n": 29,
+   "risk": "Borrowed inflow decay",
+   "treatment": "Estimated per sector from deposit flows",
+   "status": "Removed",
+   "where": "§3.4",
+   "resolution": "—"
+  },
+  {
+   "n": 30,
+   "risk": "Ad hoc threshold",
+   "treatment": "90th percentile of pre-2020 windows of the same length, re-read as the episode ages; alternatives reported",
+   "status": "Removed",
+   "where": "§3.3, Table 14",
+   "resolution": "—"
+  },
+  {
+   "n": 31,
+   "risk": "Optimum at grid edges",
+   "treatment": "Continuous optimisation from six starts; corners are legal bounds; the starts end within 1.1% of the loss on a flat surface",
+   "status": "Bounded",
+   "where": "§7.6",
+   "resolution": "Before any design is adopted, rerun with more starts until the best value stops improving"
+  },
+  {
+   "n": 32,
+   "risk": "Arbitrary overhang weight",
+   "treatment": "Frontier over ω_S from 0 to 1",
+   "status": "Removed",
+   "where": "Table 15",
+   "resolution": "—"
+  },
+  {
+   "n": 33,
+   "risk": "Optimisation on one scenario",
+   "treatment": "Two scenarios, two horizons",
+   "status": "Removed",
+   "where": "Table 15",
+   "resolution": "—"
+  },
+  {
+   "n": 34,
+   "risk": "Effects below what can be measured",
+   "treatment": "Stated: 127 × below HICP rounding",
+   "status": "Bounded",
+   "where": "§7.9",
+   "resolution": "A finding, not a defect; the trial measures the parameters that could change it"
+  },
+  {
+   "n": 35,
+   "risk": "Model uncertainty and correlated parameters",
+   "treatment": "Four structures; correlated draws; the stance structure acts on both arms alike, so structural variety is limited",
+   "status": "Bounded",
+   "where": "§7.7",
+   "resolution": "Structures added as the literature develops; all four reported"
+  },
+  {
+   "n": 36,
+   "risk": "Arbitrary parameter ranges",
+   "treatment": "Published ranges drawn uniformly; no distributions for φ_sel and r_0 until the trials report",
+   "status": "Bounded",
+   "where": "§7.7, §10",
+   "resolution": "Distributions replaced by trial estimates (§10)"
+  },
+  {
+   "n": 37,
+   "risk": "Informal stability proof",
+   "treatment": "Lyapunov certificate and input-to-state bound for the core; no global proof for the full nonlinear network",
+   "status": "Bounded",
+   "where": "§8",
+   "resolution": "Global proof is an open mathematical problem; convergence checked numerically from every reported start"
+  },
+  {
+   "n": 38,
+   "risk": "Basic integrator",
+   "treatment": "Time-step error measured: 0.20% of the effect",
+   "status": "Removed",
+   "where": "§8",
+   "resolution": "—"
+  },
+  {
+   "n": 39,
+   "risk": "Incomplete costs",
+   "treatment": "Premium, fees, administration, IT build and operation; fee, administration and lower IT figures are assumptions",
+   "status": "Bounded",
+   "where": "Table 16",
+   "resolution": "Binding quotes in the procurement for the pilot"
+  },
+  {
+   "n": 40,
+   "risk": "Recall routes never exercised",
+   "treatment": "Exercised in direct tests; not reached in reported scenarios because release waits for target",
+   "status": "Removed",
+   "where": "§7.9",
+   "resolution": "—"
+  },
+  {
+   "n": 41,
+   "risk": "Legal design asserted",
+   "treatment": "Analysis against Pringle and Arts. 122–136 TFEU; regulatory status of PHX open; no consultation yet",
+   "status": "Bounded",
+   "where": "§2.5",
+   "resolution": "Consultation of the Commission, the ECB (Art. 127(4) TFEU) and national supervisors before any pilot"
+  },
+  {
+   "n": 42,
+   "risk": "Unsourced trial assumptions",
+   "treatment": "Stated as assumptions; sensitivity tabulated; pilot proposed",
+   "status": "Bounded",
+   "where": "§10.2, Table 19",
+   "resolution": "Pilot of about 2,000 households measures take-up and variance before sizing (§10.2)"
+  },
+  {
+   "n": 43,
+   "risk": "Infeasible firm arm",
+   "treatment": "Redesigned to 16,600 firms per arm; rests on assumed take-up and R^2, with sensitivity",
+   "status": "Bounded",
+   "where": "§10.2",
+   "resolution": "The same pilot for firms; sample re-sized on its results"
+  },
+  {
+   "n": 44,
+   "risk": "Simulated trials by normal approximation",
+   "treatment": "Individual-level simulation",
+   "status": "Removed",
+   "where": "§10.3",
+   "resolution": "—"
+  },
+  {
+   "n": 45,
+   "risk": "External validity",
+   "treatment": "Complier effect is the relevant one; reweighting; stepped-wedge rollout",
+   "status": "Bounded",
+   "where": "§10.4",
+   "resolution": "Reweighting to the distribution of excess deposits; stepped-wedge rollout (§10.4)"
+  },
+  {
+   "n": 46,
+   "risk": "Anchor log not independent",
+   "treatment": "Entries in the Sigstore Rekor log, verified in the browser against Rekor itself",
+   "status": "Removed",
+   "where": "§9.4",
+   "resolution": "—"
+  },
+  {
+   "n": 47,
+   "risk": "Key replaced before anchoring",
+   "treatment": "Key registration anchored at creation; identity requires qualified certificates",
+   "status": "Bounded",
+   "where": "§9.4",
+   "resolution": "eIDAS qualified certificates for mandate-holders and countersignature by the Court of Auditors (§9.4)"
+  },
+  {
+   "n": 48,
+   "risk": "Anchor log can be overwhelmed",
+   "treatment": "Rate limits; exhaustion delays but cannot falsify",
+   "status": "Bounded",
+   "where": "§9.4",
+   "resolution": "In production only certified mandate-holders anchor; limits per key instead of per address"
+  },
+  {
+   "n": 49,
+   "risk": "IMF vintage not identified",
+   "treatment": "April 2026 WEO; historical vintages listed",
+   "status": "Removed",
+   "where": "§3.1",
+   "resolution": "—"
+  },
+  {
+   "n": 50,
+   "risk": "Tiny numbers hard to read",
+   "treatment": "Units stated; detectability and plain statements",
+   "status": "Removed",
+   "where": "§7.9, executive summary",
+   "resolution": "—"
+  },
+  {
+   "n": 51,
+   "risk": "Long abstract, no summary",
+   "treatment": "Short abstract and executive summary",
+   "status": "Removed",
+   "where": "Front matter",
+   "resolution": "—"
+  },
+  {
+   "n": 52,
+   "risk": "Real-time scenario with full-sample parameters",
+   "treatment": "Scenario rerun with the Phillips curve estimated on the 2021 vintage and data to 2020; effect of the same order",
+   "status": "Removed",
+   "where": "§7.2",
+   "resolution": "—"
+  },
+  {
+   "n": 53,
+   "risk": "Inflation anchors fixed at today's targets",
+   "treatment": "Targets in force at each date, from the central banks' records, in estimation and backtest",
+   "status": "Removed",
+   "where": "§5.1, §6.2",
+   "resolution": "—"
+  },
+  {
+   "n": 54,
+   "risk": "Coarse global monitor",
+   "treatment": "Annual saving and fiscal balances, fixed threshold, oil route for energy; breach volatility from each economy's IMF forecast errors; not evaluated, not used for any EU result",
+   "status": "Bounded",
+   "where": "§3.8, §6.1",
+   "resolution": "Financial accounts used where economies publish them (US Z.1, UK ONS) as the panel is extended"
+  },
+  {
+   "n": 55,
+   "risk": "Implausible or unavailable source data",
+   "treatment": "Plausibility check before replacement; previous copy kept; no unofficial substitute",
+   "status": "Removed",
+   "where": "§3.1",
+   "resolution": "—"
+  }
+ ],
+ "inherent": "Beyond the register, five uncertainties are inherent: future energy prices, the largest source of forecast error; turning points, where every statistical early warning understates risk; the persistence of core inflation after large shocks, which a linear Phillips curve understates (§7.2); the behavioural parameters, until the trials report; and omitted channels — the model has no banking sector, exchange-rate channel beyond energy and oil prices in euro, or fiscal reaction to the premium. The institutional route requires an intergovernmental agreement, national legislation and, for the Digital Euro route, the Digital Euro regulation."
+}

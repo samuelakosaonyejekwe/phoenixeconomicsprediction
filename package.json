@@ -1,0 +1,26 @@
+{
+  "name": "phoenix-economics",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "snapshot": "node scripts/snapshot.mjs",
+    "build": "node scripts/build.mjs",
+    "dev": "node scripts/build.mjs && python3 -m http.server 8080 --directory dist",
+    "deploy:cloudflare": "npm run build && npx --yes wrangler@4 pages deploy dist --project-name=phoenixeconomics --branch=main",
+    "deploy:worker": "cd cloudflare && npx --yes wrangler@4 deploy",
+    "test": "node --test test/*.test.mjs",
+    "test:e2e": "node e2e/app.mjs",
+    "test:full": "node scripts/check-paper.mjs",
+    "paper": "node paper/compute.mjs && python3 paper/stability.py && python3 paper/tables.py && python3 paper/figures.py"
+  },
+  "author": "Samuel Akosa Onyejekwe",
+  "license": "UNLICENSED",
+  "description": "Live implementation of Phoenix Economics Solutions: a network differential-equation framework for real-time surplus absorption, liquidity routing and inflation early warning.",
+  "devDependencies": {
+    "@resvg/resvg-js": "^2.6.2",
+    "esbuild": "^0.28.2",
+    "katex": "^0.19.0",
+    "playwright-core": "1.49"
+  },
+  "private": true
+}
