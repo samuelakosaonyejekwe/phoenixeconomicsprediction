@@ -1,0 +1,32 @@
+// Register of the stabilisation programmes: the problem each addresses, the mechanism, the live
+// indicator that drives it and the page where it runs. Status: 'live' = computed from data fetched by
+// the browser; 'model' = computed in the simulation; 'design' = governed by rules, no live indicator.
+export const REGISTER = [
+  { area: 'Global', problem: 'Inflation', mechanism: 'Threshold contracts convert excess deposits into PHX credits; a money or credit aggregate must confirm the inflation signal', indicator: 'HICP inflation, M3, M1, bank loans', page: 'signals', status: 'live' },
+  { area: 'Global', problem: 'Excess liquidity', mechanism: 'Excess deposits by sector against a historical threshold; currency in circulation against its trend; tiered rewards for converting cash', indicator: 'Financial accounts, currency in circulation', page: 'detect', status: 'live' },
+  { area: 'Global', problem: 'Recession', mechanism: 'Release of PHX credits into wallets once inflation is at target; employment and recovery fund where unemployment is above its natural rate', indicator: 'Output gap, unemployment', page: 'programmes', status: 'live' },
+  { area: 'Global', problem: 'Market volatility', mechanism: 'Volatility index of the exchange rate, oil and yields; above the alert level the volatility buffer is released', indicator: 'Daily euro–dollar rate, Brent, 10-year yield', page: 'signals', status: 'live' },
+  { area: 'Global', problem: 'Commodity price instability', mechanism: 'Commodity basket in euro, price bands around five-year averages, price floors and caps, commodity-linked credits', indicator: 'Brent, gold, wheat, maize, copper', page: 'markets', status: 'live' },
+  { area: 'Global', problem: 'Currency devaluation', mechanism: 'Depreciation trigger opens a swap line and raises the reserve share held in PHX', indicator: 'Daily reference exchange rates', page: 'markets', status: 'live' },
+  { area: 'Global', problem: 'Speculative bubbles', mechanism: 'Three signals (real price growth, gap from trend, credit growth) scale an offer to divert new investment into stabilisation bonds', indicator: 'House price index, loans to households', page: 'markets', status: 'live' },
+  { area: 'Global', problem: 'Unemployment', mechanism: 'Employment and recovery fund allocated by the unemployment gap', indicator: 'Unemployment rate, natural rate', page: 'programmes', status: 'live' },
+  { area: 'Global', problem: 'Public debt', mechanism: 'Exchange of maturing debt into PHX bonds at the reference yield plus a margin; project bonds and the investment fund finance public works', indicator: 'Government debt, 10-year yields', page: 'programmes', status: 'live' },
+  { area: 'European Union', problem: 'Disparities between member states', mechanism: 'Routing kernel inside a currency area; stability fund allocated by need and paid in tranches against milestones', indicator: 'Inflation, output gap, unemployment, fiscal balance', page: 'programmes', status: 'live' },
+  { area: 'European Union', problem: 'Sovereign debt crises', mechanism: 'Debt exchange with growth-linked repayments; the saving accrues as debt falls due', indicator: 'Yield spread to the lowest euro-area yield', page: 'programmes', status: 'live' },
+  { area: 'European Union', problem: 'Banking-sector vulnerability', mechanism: 'Liquidity facility against collateral and a swap line, sized by the non-performing loans ratio', indicator: 'Non-performing loans, CET1 ratio', page: 'programmes', status: 'live' },
+  { area: 'European Union', problem: 'Deflation', mechanism: 'Below the deflation floor the mechanism reverses: PHX is converted back into Digital Euro', indicator: 'HICP inflation', page: 'signals', status: 'live' },
+  { area: 'European Union', problem: 'Ageing population', mechanism: 'Ageing and welfare fund allocated by the old-age dependency ratio', indicator: 'Old-age dependency ratio', page: 'programmes', status: 'live' },
+  { area: 'European Union', problem: 'Trade imbalances', mechanism: 'Export support fund: credit at the reference rate, insurance and logistics for economies in external deficit', indicator: 'Current-account balance', page: 'programmes', status: 'live' },
+  { area: 'European Union', problem: 'Trade with the United Kingdom', mechanism: 'Adjustment fund for the most exposed exporters: customs, compliance and diversification costs', indicator: 'Exports to the United Kingdom, % of GDP', page: 'programmes', status: 'live' },
+  { area: 'European Union', problem: 'Low productivity growth', mechanism: 'Productivity and research fund allocated by the shortfall from the 3% research objective', indicator: 'Research spending, labour productivity', page: 'programmes', status: 'live' },
+  { area: 'European Union', problem: 'Regulatory complexity', mechanism: 'Harmonisation grants paid against transposition milestones, cross-border compliance credits and regulatory sandboxes', indicator: 'None published at the needed frequency', page: 'programmes', status: 'design' },
+  { area: 'PHX circulation', problem: 'Oversaturation of wallets', mechanism: 'Saturation recall into Digital Euro, bank accounts or the Dragon reserve; excess locked into time deposits, PHX bonds and the investment fund', indicator: 'Wallet saturation in the simulation', page: 'redistribute', status: 'model' },
+  { area: 'PHX circulation', problem: 'Balance of PHX and euro', mechanism: 'Recall proportional to the size of the inflation breach; circulation weights of PHX and M3 that sum to 100', indicator: 'Inflation, M3 stock', page: 'programmes', status: 'live' },
+  { area: 'PHX circulation', problem: 'Scarcity of the Dragon reserve', mechanism: 'Annual cap on conversion into the reserve; open only in a crisis', indicator: 'Crisis inflation level, health index', page: 'programmes', status: 'live' },
+  { area: 'PHX circulation', problem: 'Programmable rules', mechanism: 'Every threshold is a setting; each change of state is written to the signed audit ledger', indicator: 'All of the above', page: 'contracts', status: 'live' },
+];
+export const REGISTER_STATUS = {
+  live: { tone: 'good', label: 'Live data', desc: 'Computed from official data fetched by this browser.' },
+  model: { tone: 'info', label: 'Simulation', desc: 'Computed inside the simulation of the core model.' },
+  design: { tone: 'warn', label: 'Rule only', desc: 'Governed by published rules; no official indicator is available at the needed frequency.' },
+};

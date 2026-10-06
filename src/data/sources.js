@@ -81,6 +81,17 @@ async function ecbSeries(key, n, timeout = 20000, startPeriod = null) {
   return rows.slice(1).map(r => [r[ti], num(r[vi])]).filter(r => r[1] !== null);
 }
 
+// One ECB series per reference area (country wildcard in the key) -> { geo: [[period, value], ...] },
+// with the ECB's GR written as Eurostat's EL.
+async function ecbByArea(key, n, timeout = 40000) {
+  const rows = parseCSV(await getJSON(`${ECB}${key}?lastNObservations=${n}&format=csvdata`, { text: true, timeout }));
+  const h = rows[0], ai = h.indexOf('REF_AREA'), ti = h.indexOf('TIME_PERIOD'), vi = h.indexOf('OBS_VALUE');
+  const out = {};
+  for (const r of rows.slice(1)) { const v = num(r[vi]); if (v !== null) (out[r[ai] === 'GR' ? 'EL' : r[ai]] ||= []).push([r[ti], v]); }
+  for (const k in out) out[k].sort((a, b) => (a[0] < b[0] ? -1 : 1));
+  return out;
+}
+
 function monthsAgo(n) {
   const d = new Date();
   d.setUTCMonth(d.getUTCMonth() - n);
@@ -89,6 +100,33 @@ function monthsAgo(n) {
 const yearsAgoQ = n => `${new Date().getUTCFullYear() - n}-Q1`;
 
 const eurostat = (ds, params) => getJSON(`${EUROSTAT}${ds}?${params}`).then(parseJsonStat);
+
+// International commodity prices (INSEE, monthly, US dollars) for the commodity basket.
+const INSEE = 'https://bdm.insee.fr/series/sdmx/data/SERIES_BDM/';
+const INSEE_EURUSD = '010002053'; // euros per US dollar
+export const COMMODITIES = [
+  { k: 'brent', id: '010002077', label: 'Brent crude oil', unit: 'US$ per barrel', group: 'Energy' },
+  { k: 'gold', id: '010002061', label: 'Gold', unit: 'US$ per ounce', group: 'Precious metals' },
+  { k: 'wheat', id: '010002046', label: 'Wheat', unit: 'US¢ per bushel', group: 'Agriculture' },
+  { k: 'maize', id: '010002058', label: 'Maize', unit: 'US¢ per bushel', group: 'Agriculture' },
+  { k: 'copper', id: '010002052', label: 'Copper', unit: 'US$ per tonne', group: 'Industrial metals' },
+];
+// SDMX-ML (structure-specific) -> { idbank: [[period, value], ...] } sorted by period.
+export function parseInsee(xml) {
+  const out = {};
+  for (const m of String(xml).matchAll(/<Series\b[^>]*\bIDBANK="(\d+)"[^>]*>([\s\S]*?)<\/Series>/g)) {
+    const rows = [];
+    for (const o of m[2].matchAll(/<Obs\b[^>]*>/g)) {
+      const t = /TIME_PERIOD="([^"]+)"/.exec(o[0]), v = /OBS_VALUE="([^"]+)"/.exec(o[0]);
+      if (t && v && num(v[1]) !== null) rows.push([t[1], +v[1]]);
+    }
+    rows.sort((a, b) => (a[0] < b[0] ? -1 : 1));
+    if (rows.length) out[m[1]] = rows;
+  }
+  return out;
+}
+// Currencies of the global panel and of the EU economies outside the euro that the ECB publishes daily.
+export const FX_HISTORY = ['USD', 'CAD', 'MXN', 'BRL', 'GBP', 'CHF', 'NOK', 'PLN', 'TRY', 'ZAR', 'INR', 'CNY', 'JPY', 'KRW', 'IDR', 'SGD', 'AUD', 'SEK', 'DKK', 'CZK', 'HUF', 'RON'];
 
 // Each connector: id, label, provider, cadence, home page, run() -> data.
 export const CONNECTORS = [
@@ -266,6 +304,85 @@ export const CONNECTORS = [
       const ep = await Promise.all(Object.keys(months).map(m => getJSON(`${ECB}YC/B.U2.EUR.4F.G_N_A.SV_C_YM.IF_${m}?startPeriod=2021-12-24&endPeriod=2021-12-31&format=csvdata`, { text: true, timeout: 60000 })
         .then(t => { const r = parseCSV(t), h = r[0], vi = h.indexOf('OBS_VALUE'), ti = h.indexOf('TIME_PERIOD'); const lastRow = r.slice(1).filter(x => x[vi]).at(-1); return lastRow ? [months[m], num(lastRow[vi]), lastRow[ti]] : null; }).catch(() => null)));
       return { spf, forwards: { date: fwd[0][1]?.[0], curve: fwd.filter(([, r]) => r).map(([m, r]) => [months[m], r[1]]) }, forwardsEpisode: { date: ep.find(Boolean)?.[2], curve: ep.filter(Boolean).map(r => [r[0], r[1]]) }, eurusdM };
+    },
+  },
+  {
+    id: 'commod', label: 'International commodity prices: Brent, gold, wheat, maize, copper (monthly, US$) and the euro–dollar rate', provider: 'INSEE (international prices of imported raw materials)', cadence: 'Monthly',
+    home: 'https://www.insee.fr/en/statistiques/series/102930085',
+    run: async () => {
+      const ids = [...COMMODITIES.map(c => c.id), INSEE_EURUSD].join('+');
+      const by = parseInsee(await getJSON(`${INSEE}${ids}?startPeriod=2005-01`, { text: true, timeout: 40000 }));
+      const series = Object.fromEntries(COMMODITIES.map(c => [c.k, by[c.id] || []]).filter(([, r]) => r.length));
+      if (Object.keys(series).length < 3) throw new Error('INSEE returned too few commodity series');
+      return { series, eurPerUsd: by[INSEE_EURUSD] || [] };
+    },
+  },
+  {
+    id: 'money', label: 'Euro-area money and credit: M3 and M1 growth, currency in circulation, loans to households and firms', provider: 'European Central Bank', cadence: 'Monthly',
+    home: 'https://data.ecb.europa.eu/publications/money-credit-and-banking',
+    run: async () => {
+      const keys = { m3: 'BSI/M.U2.Y.V.M30.X.I.U2.2300.Z01.A', m1: 'BSI/M.U2.Y.V.M10.X.I.U2.2300.Z01.A', m3Stock: 'BSI/M.U2.Y.V.M30.X.1.U2.2300.Z01.E', cash: 'BSI/M.U2.N.V.L10.X.1.U2.2300.Z01.E', hhLoans: 'BSI/M.U2.Y.U.A20.A.I.U2.2250.Z01.A', nfcLoans: 'BSI/M.U2.Y.U.A20.A.I.U2.2240.Z01.A' };
+      const rows = await Promise.all(Object.entries(keys).map(([k, key]) => ecbSeries(key, 300, 40000).then(r => [k, r])));
+      return Object.fromEntries(rows);
+    },
+  },
+  {
+    id: 'debt', label: 'Government debt, % of GDP (quarterly) and 10-year government bond yields (monthly)', provider: 'Eurostat', cadence: 'Quarterly / monthly',
+    home: 'https://ec.europa.eu/eurostat/databrowser/view/gov_10q_ggdebt/default/table',
+    run: async () => {
+      const [debt, yields] = await Promise.all([
+        eurostat('gov_10q_ggdebt', 'na_item=GD&sector=S13&unit=PC_GDP&sinceTimePeriod=2015-Q1'),
+        eurostat('irt_lt_mcby_m', 'int_rt=MCBY&sinceTimePeriod=2015-01'),
+      ]);
+      return { debt: debt.series, yields: yields.series, updated: yields.updated };
+    },
+  },
+  {
+    id: 'house', label: 'House price index: annual rate of change and level (2015 = 100)', provider: 'Eurostat', cadence: 'Quarterly',
+    home: 'https://ec.europa.eu/eurostat/databrowser/view/prc_hpi_q/default/table',
+    run: async () => {
+      const [rch, idx] = await Promise.all([
+        eurostat('prc_hpi_q', 'purchase=TOTAL&unit=RCH_A&sinceTimePeriod=2006-Q1'),
+        eurostat('prc_hpi_q', 'purchase=TOTAL&unit=I15_Q&sinceTimePeriod=2005-Q1'),
+      ]);
+      return { rch: rch.series, idx: idx.series, updated: rch.updated };
+    },
+  },
+  {
+    id: 'fxh', label: 'Euro reference exchange rates, daily, last 13 months', provider: 'ECB reference rates via Frankfurter', cadence: 'Daily (business days)',
+    home: 'https://frankfurter.dev/',
+    run: async () => {
+      const since = new Date(Date.now() - 400 * 864e5).toISOString().slice(0, 10);
+      const d = await getJSON(`https://api.frankfurter.dev/v1/${since}..?symbols=${FX_HISTORY.join(',')}`, { timeout: 30000 });
+      const rates = {};
+      for (const [day, r] of Object.entries(d.rates).sort((a, b) => (a[0] < b[0] ? -1 : 1))) for (const [c, v] of Object.entries(r)) (rates[c] ||= []).push([day, v]);
+      return { base: 'EUR', rates };
+    },
+  },
+  {
+    id: 'banks', label: 'Bank soundness by country: non-performing loans ratio (significant institutions) and CET1 capital ratio', provider: 'European Central Bank', cadence: 'Quarterly',
+    home: 'https://data.ecb.europa.eu/data/datasets/SUP',
+    run: async () => {
+      const [npl, cet1] = await Promise.all([
+        ecbByArea('SUP/Q..W0._Z.I7000._T.SII._Z._Z._Z.PCT.C', 12),
+        ecbByArea('CBD2/Q..W0.67._Z._Z.A.A.I4008._Z._Z._Z._Z._Z._Z.PC', 12),
+      ]);
+      return { npl, cet1 };
+    },
+  },
+  {
+    id: 'struct', label: 'Structural indicators: old-age dependency, labour productivity, research spending, renewable energy, public investment, exports to the United Kingdom', provider: 'Eurostat', cadence: 'Annual / quarterly',
+    home: 'https://ec.europa.eu/eurostat/databrowser/explore/all/all_themes',
+    run: async () => {
+      const [old, prod, rd, ren, inv, uk] = await Promise.all([
+        eurostat('demo_pjanind', 'indic_de=OLDDEP1&sinceTimePeriod=2015'),
+        eurostat('nama_10_lp_ulc', 'na_item=RLPR_HW&unit=PCH_PRE&sinceTimePeriod=2015'),
+        eurostat('rd_e_gerdtot', 'sectperf=TOTAL&unit=PC_GDP&sinceTimePeriod=2015'),
+        eurostat('nrg_ind_ren', 'nrg_bal=REN&unit=PC&sinceTimePeriod=2015'),
+        eurostat('gov_10a_main', 'na_item=P51G&sector=S13&unit=PC_GDP&sinceTimePeriod=2015'),
+        eurostat('bop_c6_q', 'partner=UK&bop_item=GS&stk_flow=CRE&currency=MIO_EUR&sector10=S1&sectpart=S1&sinceTimePeriod=2019-Q1'),
+      ]);
+      return { old: old.series, prod: prod.series, rd: rd.series, ren: ren.series, inv: inv.series, uk: uk.series };
     },
   },
 ];

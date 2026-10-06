@@ -1,5 +1,7 @@
 import { h, icon } from '../ui/dom.js';
 
+// Parameters of the core model carry a provenance tag or an 'ext' flag; programme settings carry neither.
+const PARAM_PAPER = meta => 'group' in meta;
 const decimals = step => (String(step).split('.')[1] || '').length;
 
 // Parameter control bound to app.params. Values commit on release so a re-render
@@ -26,5 +28,5 @@ export function slider(app, meta) {
   return h('div', { class: ['ctrl', changed && 'changed'] },
     h('label', { class: 'ctrl-l', for: id, 'data-tip': meta.help }, meta.label, tag, help),
     h('div', { class: 'ctrl-in' }, range, out),
-    changed ? h('button', { class: 'reset', type: 'button', 'data-tip': `Return to the paper’s value, ${meta.def}`, onclick: () => app.setParam(meta.k, meta.def) }, `default ${meta.def}`) : null);
+    changed ? h('button', { class: 'reset', type: 'button', 'data-tip': meta.cal || PARAM_PAPER(meta) ? `Return to the paper’s value, ${meta.def}` : `Return to the default, ${meta.def}`, onclick: () => app.setParam(meta.k, meta.def) }, `default ${meta.def}`) : null);
 }

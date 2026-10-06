@@ -101,7 +101,7 @@ export function sourceLine(app) {
   const at = Object.values(app.status).map(s => s.at).filter(Boolean).sort().pop();
   const live = Object.values(app.status).filter(s => s.state === 'live').length;
   return h('p', { class: 'src-line' }, icon('db', 14),
-    `Official data: Eurostat, ECB, World Bank, IMF, DBnomics. ${live ? `${live} sources refreshed live` : 'Showing stored data'} · latest ${ago(at)}.`);
+    `Official data: Eurostat, ECB, World Bank, IMF, INSEE, DBnomics. ${live ? `${live} sources refreshed live` : 'Showing stored data'} · latest ${ago(at)}.`);
 }
 
 export { clear, surplusOf };

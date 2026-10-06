@@ -4,6 +4,7 @@
 const MAX_AGE_MONTHS = {
   hicp: 3, hicpx: 3, unemp: 3, energyw: 24, gov: 10, hhsave: 10, profit: 10, hhinc: 10, nfcgva: 10, finacc: 10,
   gdp: 24, sectA: 30, ecb: 2, markets: 2, fx: 2, expect: 6, wb: 36, weo: 36, imf: 36, brent: 2, oilm: 4, rates: 6,
+  commod: 4, money: 4, debt: 5, house: 10, fxh: 2, banks: 10, struct: 10,
 };
 
 const monthIndex = p => {

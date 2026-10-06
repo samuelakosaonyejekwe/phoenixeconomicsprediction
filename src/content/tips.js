@@ -12,6 +12,9 @@ export const PAGES = {
   forecast: 'Twelve-month inflation projections and the probability of touching the trigger, by economy (§6).',
   stability: 'Feedback field, activation and disorder: whether the control loop settles (§4.11–4.12, §8).',
   pilot: 'Plan the randomised trial that would measure the behavioural parameters: sample, power and cost (§10).',
+  signals: 'What arms and confirms the contracts: inflation checked against money and credit, a health index, market volatility and hard cash.',
+  markets: 'Commodity basket and price bands, credits tied to live series, house-price signals and currency depreciation.',
+  programmes: 'Debt exchange, the stability fund, seven thematic funds, the recall ladder and the register of every programme.',
   framework: 'The twelve objectives, the model’s equations, every parameter with its provenance, and interactive explorers (§4).',
   governance: 'Legal basis, monetary accounting of each flow, conversion modes, the mandate-holder and privacy (§2, §9).',
   validate: 'The paper’s published results, their reproduction in this browser, and the risk register (§5–7, §9.6, §11).',
@@ -22,6 +25,7 @@ export const PAGES = {
 export const PAGE_LABELS = {
   Overview: 'overview', 'Surplus radar': 'detect', 'Simulation lab': 'simulate', Redistribution: 'redistribute', 'Contracts & audit': 'contracts',
   'Early warning': 'forecast', Stability: 'stability', 'Pilot planner': 'pilot', Framework: 'framework', 'Design & governance': 'governance',
+  'Signals & triggers': 'signals', 'Commodities & assets': 'markets', 'Funds & programmes': 'programmes', Signals: 'signals', Commodities: 'markets', Funds: 'programmes',
   Evidence: 'validate', 'Data & status': 'data', 'Guide & install': 'guide', Surplus: 'detect', Simulation: 'simulate', Contracts: 'contracts',
 };
 
@@ -45,6 +49,23 @@ export const STATES = {
 };
 
 export const TIPS = {
+  // ---- programme pages
+  'Trigger board': 'Inflation and the money and credit aggregates that must confirm it before a conversion fires on this signal.',
+  'Economic health index': 'Composite of inflation, output, unemployment, fiscal and market stress, from 0 to 100; below the alert level contracts are prepared in advance.',
+  'Volatility index': 'Recent volatility of the exchange rate, oil and the 10-year yield as a multiple of normal.',
+  'Hard cash in circulation': 'Euro banknotes and coins against their pre-2020 trend, and the tiered premium for converting cash into PHX.',
+  'Programme settings': 'The programmable thresholds of the programmes on this page; they do not change the core simulation.',
+  'Commodity basket index': 'Weighted index of five commodities in euro; 100 means each is at its own five-year average.',
+  'Commodity price bands': 'Each commodity’s euro price against a band around its five-year average, and what the reserve and price insurance would do.',
+  'Currency credits': 'The types of credit earned in PHX and what each is worth after twelve months, from live series.',
+  'Asset-price monitor: housing': 'Three published signals of overheating in house prices and the diversion offer they scale.',
+  'Exchange-rate monitor': 'Twelve-month depreciation and volatility of each currency, and the swap lines and reserve shares they trigger.',
+  'Debt exchange into PHX bonds': 'Interest a government would save by exchanging maturing debt into PHX bonds at the reference yield plus a margin.',
+  'Stability fund allocation': 'How the stability fund is shared among economies that meet the disparity trigger, by need and size.',
+  'Thematic funds': 'Seven funds, each allocated by one published indicator against a benchmark.',
+  'Recall ladder': 'How much PHX is recalled at today’s inflation and what it is converted into.',
+  'Where excess PHX goes': 'Instruments that lock up PHX recalled from saturated wallets instead of paying it out as cash.',
+  'Programme register': 'Every problem addressed, its mechanism, its live indicator and the page where it runs.',
   // ---- card titles
   'The Phoenix closed loop, now': 'The detect → activate → absorb → convert → route → stabilise → feedback loop, with today’s values at each stage (§4).',
   'European monitor': 'Contract state, inflation, stock against threshold or breach probability for each economy. Choose the measure above; select an economy for its details.',

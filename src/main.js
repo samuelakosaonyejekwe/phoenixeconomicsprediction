@@ -13,6 +13,9 @@ import { data } from './views/data.js';
 import { guide } from './views/guide.js';
 import { pilot } from './views/pilot.js';
 import { governance } from './views/governance.js';
+import { signals } from './views/signals.js';
+import { markets } from './views/markets.js';
+import { programmes } from './views/programmes.js';
 import { openCountry } from './views/common.js';
 import { annotate, installTips, retip } from './ui/annotate.js';
 import { balance } from './ui/balance.js';
@@ -28,6 +31,9 @@ const ROUTES = [
   { id: 'stability', label: 'Stability', icon: 'wave', view: stability },
   { id: 'pilot', label: 'Pilot planner', icon: 'layers', view: pilot },
   { id: 'framework', label: 'Framework', icon: 'sigma', view: framework },
+  { id: 'signals', label: 'Signals & triggers', icon: 'zap', view: signals },
+  { id: 'markets', label: 'Commodities & assets', icon: 'globe', view: markets },
+  { id: 'programmes', label: 'Funds & programmes', icon: 'link', view: programmes },
   { id: 'governance', label: 'Design & governance', icon: 'file', view: governance },
   { id: 'validate', label: 'Evidence', icon: 'check', view: validate },
   { id: 'data', label: 'Data & status', icon: 'db', view: data },

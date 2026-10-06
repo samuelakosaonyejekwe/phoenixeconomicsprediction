@@ -86,7 +86,7 @@ const manifest = {
 await writeFile(p('dist/manifest.webmanifest'), JSON.stringify(manifest, null, 1));
 
 // 5. HTML with a strict Content-Security-Policy.
-const DATA_ORIGINS = ['https://ec.europa.eu', 'https://data-api.ecb.europa.eu', 'https://api.worldbank.org', 'https://api.db.nomics.world', 'https://api.frankfurter.dev', 'https://rekor.sigstore.dev'];
+const DATA_ORIGINS = ['https://ec.europa.eu', 'https://data-api.ecb.europa.eu', 'https://api.worldbank.org', 'https://api.db.nomics.world', 'https://api.frankfurter.dev', 'https://bdm.insee.fr', 'https://rekor.sigstore.dev'];
 const mirrorOrigins = [...new Set([...mirrorsCfg.mirrors, ...(mirrorsCfg.dataEndpoints || [])].map(m => new URL(m).origin))];
 const csp = (scriptSrc, extra = '') => [
   "default-src 'self'", `script-src ${scriptSrc}`, "style-src 'self' 'unsafe-inline'", "img-src 'self' data: blob:", "font-src 'self'",

@@ -27,12 +27,12 @@ const errors = [];
 page.on('pageerror', e => errors.push(e.message));
 // Network failures of the publishers are tolerated (the app falls back to stored data); any other error,
 // including a Content Security Policy violation, fails the test.
-const PUBLISHERS = /ec\.europa\.eu|data-api\.ecb\.europa\.eu|api\.worldbank\.org|api\.db\.nomics\.world|api\.frankfurter\.dev|rekor\.sigstore\.dev|workers\.dev|pages\.dev|github\.io/;
+const PUBLISHERS = /ec\.europa\.eu|data-api\.ecb\.europa\.eu|api\.worldbank\.org|api\.db\.nomics\.world|api\.frankfurter\.dev|bdm\.insee\.fr|rekor\.sigstore\.dev|workers\.dev|pages\.dev|github\.io/;
 page.on('console', m => { const t = m.text(); if (m.type() === 'error' && !/Failed to load resource|net::ERR_/.test(t) && !(/blocked by CORS policy/.test(t) && PUBLISHERS.test(t))) errors.push(t); });
 
 await page.goto(base + '#/overview');
 await page.waitForSelector('.kpis', { timeout: 120000 });
-for (const r of ['overview', 'detect', 'simulate', 'redistribute', 'contracts', 'forecast', 'stability', 'pilot', 'framework', 'governance', 'validate', 'data', 'guide']) {
+for (const r of ['overview', 'detect', 'simulate', 'redistribute', 'contracts', 'forecast', 'stability', 'pilot', 'framework', 'signals', 'markets', 'programmes', 'governance', 'validate', 'data', 'guide']) {
   await page.goto(base + '#/' + r);
   await page.waitForTimeout(1500);
   const text = await page.locator('main').innerText();

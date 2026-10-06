@@ -51,7 +51,7 @@ async function watchdog(env) {
 
 const byId = Object.fromEntries(CONNECTORS.map(c => [c.id, c.run]));
 Object.assign(byId, SERVER_SOURCES);
-const GROUPS = [['hicp', 'gov', 'hhsave', 'oilm'], ['profit', 'unemp', 'gdp', 'energyw', 'rates'], ['ecb', 'markets', 'fx', 'expect', 'hicpx'], ['wb', 'hhinc', 'sectA'], ['weo', 'brent', 'nfcgva'], ['imf', 'finacc']];
+const GROUPS = [['hicp', 'gov', 'hhsave', 'oilm', 'money', 'banks'], ['profit', 'unemp', 'gdp', 'energyw', 'rates', 'commod'], ['ecb', 'markets', 'fx', 'expect', 'hicpx', 'struct'], ['wb', 'hhinc', 'sectA', 'debt'], ['weo', 'brent', 'nfcgva', 'house'], ['imf', 'finacc', 'fxh']];
 // Any source not assigned to a group joins the last one, so a new connector can never be left unrefreshed.
 for (const id of Object.keys(byId)) if (!GROUPS.flat().includes(id)) GROUPS[GROUPS.length - 1].push(id);
 const IDS = GROUPS.flat();
@@ -113,8 +113,8 @@ async function anchorPost(request, env) {
     const digest = [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(b.hash)))].map(x => x.toString(16).padStart(2, '0')).join('');
     if (b.rekor.kind !== 'hashedrekord' || v?.algorithm !== 'sha256' || v?.value !== digest) return json({ error: 'transparency-log entry does not commit to this hash' }, 400);
   }
-  // Limits: 10 new anchors per client address per hour and 200 per day overall, so anchors (with the
-  // hourly data refresh, about 700 writes a day) stay within the 1,000 daily key-value writes of the
+  // Limits: 10 new anchors per client address per hour and 100 per day overall, so anchors (with the
+  // hourly data refresh, about 850 writes a day) stay within the 1,000 daily key-value writes of the
   // free plan. The counters are kept per data centre, so the limits are approximate.
   const cache = caches.default, ip = request.headers.get('cf-connecting-ip') || 'unknown';
   const hour = new Date().toISOString().slice(0, 13), day = hour.slice(0, 10);
@@ -122,7 +122,7 @@ async function anchorPost(request, env) {
   const [ipHit, dayHit] = await Promise.all([cache.match(ipKey), cache.match(dayKey)]);
   const ipUsed = ipHit ? +(await ipHit.text()) : 0, dayUsed = dayHit ? +(await dayHit.text()) : 0;
   if (ipUsed >= 10) return json({ error: 'hourly anchor limit for this client reached' }, 429);
-  if (dayUsed >= 200) return json({ error: 'daily anchor limit reached' }, 429);
+  if (dayUsed >= 100) return json({ error: 'daily anchor limit reached' }, 429);
   await Promise.all([cache.put(ipKey, new Response(String(ipUsed + 1), { headers: { 'cache-control': 'max-age=3600' } })), cache.put(dayKey, new Response(String(dayUsed + 1), { headers: { 'cache-control': 'max-age=86400' } }))]);
   // Public transparency log (Sigstore Rekor): independent, append-only, signed inclusion records.
   let rekor = null;

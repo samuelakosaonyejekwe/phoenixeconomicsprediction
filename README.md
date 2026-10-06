@@ -21,6 +21,18 @@ The coupled model runs in the visitor's browser on today's official data for the
 | 11. Auditable intervention | Signed, hash-chained ledger; chain heads entered in the public Sigstore Rekor log and verified in the browser against Rekor itself |
 | 12. One integrated framework | Overview: the detect → activate → absorb → convert → route → stabilise → feedback loop, live |
 
+### Stabilisation programmes on live data
+
+Three pages run beside the core model on data each browser fetches itself, and write every change of state to the audit ledger. They do not change the core simulation or the paper's results.
+
+| Page | Mechanisms | Live sources |
+|---|---|---|
+| Signals & triggers | Trigger board (inflation must be confirmed by a money or credit aggregate), deflation floor, economic health index, volatility index, hard cash against trend with a tiered conversion premium | Eurostat, ECB |
+| Commodities & assets | Commodity basket in euro with price bands, floors and caps; currency credits tied to live series; housing signals with a diversion offer; currency depreciation, swap lines and reserve shares | INSEE, Eurostat, ECB |
+| Funds & programmes | Debt exchange into PHX bonds with growth-linked repayments; stability fund in tranches; seven thematic funds (employment, exports, bank liquidity, ageing, research, green infrastructure, trade with the United Kingdom); proportional recall ladder with a capped Dragon reserve; instruments for excess PHX; the programme register | Eurostat, ECB, IMF |
+
+The models are in `src/model/programmes.js`, their settings are stored per device, and `test/programmes.test.mjs` checks each rule.
+
 The **Evidence** page shows the paper's results and reproduces them in the browser: it runs the same function as the paper's computation script (`src/model/reproduce.js`) on the archived data of 4 October 2026 and compares every published value. It also shows the paper's methodological risk register (Table 20): each risk, how it is removed or bounded, and the step that resolves it.
 
 ## Reproducing the paper
@@ -36,7 +48,7 @@ npm run paper                    # rewrite results, stability, tables (CSV) and 
 
 ## Data and freshness
 
-The model runs entirely in the visitor's browser. Each browser fetches Eurostat, ECB, World Bank and DBnomics data directly from the publishers when the app opens and every 15 minutes while it is open, checks that the new data are plausible (non-empty, latest observation recent for the source's cadence), and stores them on the device. Sources that browsers cannot fetch (the current IMF DataMapper vintage, BIS policy rates, Brent prices from FRED) come from two baseline snapshots:
+The model runs entirely in the visitor's browser. Each browser fetches Eurostat, ECB, World Bank, DBnomics and INSEE data directly from the publishers when the app opens and every 15 minutes while it is open, checks that the new data are plausible (non-empty, latest observation recent for the source's cadence), and stores them on the device. Sources that browsers cannot fetch (the current IMF DataMapper vintage, BIS policy rates, Brent prices from FRED) come from two baseline snapshots:
 
 - **GitHub:** the workflow `.github/workflows/deploy.yml` rebuilds `data/snapshot.json` every hour and redeploys GitHub Pages and Cloudflare Pages. A source that fails keeps its last deployed copy and the run reports a warning.
 - **Cloudflare:** the worker `phoenix-refresh` (`cloudflare/`) refreshes one of six source groups every 10 minutes, so every source hourly, and serves its snapshot at https://phoenix-refresh.flame-in-freefall.workers.dev/snapshot.json. On the Cloudflare host, `data/snapshot.json` is served from it by a Pages function (`functions/`). The same worker hosts the anchor log of the audit ledger and, once an hour, starts the GitHub workflow if it is overdue (`/health` reports its state).

@@ -6,6 +6,8 @@ import { simulate, prepare } from './model/engine.js';
 import { DEFAULTS, SCENARIOS, PARAM_INDEX } from './model/params.js';
 import { forecastCell } from './model/forecast.js';
 import { append as appendRaw, verify, anchor } from './model/ledger.js';
+import { programmes, programmeStates, sanitizeProg, PROG_DEFAULTS, PROG_INDEX, QUIET } from './model/programmes.js';
+import { GLOBAL } from './data/geo.js';
 
 // Ledger key store (IndexedDB) and the public anchor log on the data worker (§9.4).
 const keyStore = { get: k => kvGet(k), set: (k, v) => kvSet(k, v) };
@@ -19,6 +21,9 @@ const LS = 'phx:prefs';
 const loadPrefs = () => { try { return JSON.parse(localStorage.getItem(LS)) || {}; } catch { return {}; } };
 const savePrefs = p => { try { localStorage.setItem(LS, JSON.stringify(p)); } catch {} };
 
+// Currency names for the exchange-rate monitor.
+const CCY_NAMES = { ...Object.fromEntries(GLOBAL.filter(c => c.ccy !== 'EUR').map(c => [c.ccy, c.name])), SEK: 'Sweden', DKK: 'Denmark', CZK: 'Czechia', HUF: 'Hungary', RON: 'Romania', PLN: 'Poland' };
+
 export const REGIONS = { ea: 'Euro area (21)', eu: 'European Union (27)', global: 'Global (29 economies)' };
 
 export function createApp() {
@@ -28,6 +33,7 @@ export function createApp() {
     region: REGIONS[prefs.region] ? prefs.region : 'ea',
     scenario: SCENARIOS[prefs.scenario] ? prefs.scenario : 'live',
     params: sanitize({ ...DEFAULTS, ...(prefs.params || {}) }),
+    prog: sanitizeProg(prefs.prog),
     data: {}, status: {}, snapshotInfo: null, refreshing: false,
     cells: [], ledger: [], ledgerOk: null, live: {},
     version: 0,
@@ -46,7 +52,7 @@ export function createApp() {
     }
     return p;
   }
-  const persist = () => savePrefs({ region: app.region, scenario: app.scenario, params: app.params });
+  const persist = () => savePrefs({ region: app.region, scenario: app.scenario, params: app.params, prog: app.prog });
 
   // Pages are redrawn only when data actually change; progress updates refresh only the status chrome,
   // so open sections, focus and partly typed inputs are not lost while sources load.
@@ -61,13 +67,13 @@ export function createApp() {
       rebuild();
       emit();
     } else emit('status');
-    if (!refreshing) await nowcast();
+    if (!refreshing) { await nowcast(); await signalPass(); }
   });
 
   function rebuild() {
     app.cells = buildCells(app.data, app.region, { nowcast: app.params.nowcast, P: app.params });
     app.dataStamp = (app.dataStamp || 0) + 1;
-    memo.clear(); refMemo.clear(); stateMemo.clear();
+    memo.clear(); refMemo.clear(); stateMemo.clear(); progMemo.clear();
   }
 
   // Memoised simulation per (region, scenario, params, data version).
@@ -97,7 +103,7 @@ export function createApp() {
     return memo.get(key);
   };
 
-  app.setRegion = r => { if (!REGIONS[r]) return; app.region = r; persist(); rebuild(); emit(); nowcast(); };
+  app.setRegion = r => { if (!REGIONS[r]) return; app.region = r; persist(); rebuild(); emit(); nowcast().then(signalPass); };
   app.setScenario = sc => { if (!SCENARIOS[sc]) return; app.scenario = sc; persist(); memo.clear(); emit(); if (SCENARIOS[sc].asOf) app.ensureVintages(); };
   // IMF forecast vintages (2009–2025) for scenarios built on the data of a past date (§7.2), loaded on demand.
   app.ensureVintages = async () => {
@@ -134,6 +140,53 @@ export function createApp() {
     stateMemo.set(key, out);
     return out;
   };
+
+  // Stabilisation programmes on live data (src/model/programmes.js), with their own settings. The PHX in
+  // circulation and the excess above wallet capacity come from the current simulation.
+  const progMemo = new Map();
+  app.programmes = () => {
+    const key = JSON.stringify([app.region, app.scenario, app.dataStamp, app.prog, app.params]);
+    if (!progMemo.has(key)) {
+      let phx = 0, excess = 0;
+      try { const sim = app.sim(true); if (sim) { phx = sim.totals.creditsHeld + sim.totals.walletsHeld; excess = sim.totals.recallDE + sim.totals.recallDeposits + sim.totals.recallDragon; } } catch {}
+      progMemo.clear();
+      progMemo.set(key, programmes(app.data, app.cells, app.params, app.prog, { phx, excess, names: CCY_NAMES }));
+    }
+    return progMemo.get(key);
+  };
+  // Shim so the parameter control of the core model also edits programme settings.
+  app.progCtl = { get params() { return app.prog; }, setParam: (k, v) => app.setProg(k, v) };
+  app.setProg = (k, v) => { if (!PROG_INDEX[k]) return; app.prog = sanitizeProg({ ...app.prog, [k]: v }); persist(); emit(); signalPass(); };
+  app.resetProg = () => { app.prog = { ...PROG_DEFAULTS }; persist(); emit(); signalPass(); };
+
+  // Every change of a programme state on real data is written to the audit ledger, like contract states.
+  let signalling = Promise.resolve();
+  const signalPass = () => (signalling = signalling.then(signalOnce, signalOnce));
+  async function signalOnce() {
+    if (!app.cells.length) return;
+    let pr; try { pr = app.programmes(); } catch { return; }
+    const next = programmeStates(pr), prev = (await kvGet('prog:' + app.region)) || {};
+    const why = key => {
+      const [kind, id] = key.split(':');
+      if (kind === 'trigger') return { cell: 'ALL', cause: pr.board.rows.filter(r => r.value != null).map(r => `${r.label} ${r.value.toFixed(2)}% (trigger ${r.threshold}%)`).join('; '), indicators: Object.fromEntries(pr.board.rows.filter(r => r.value != null).map(r => [r.k, +r.value.toFixed(3)])) };
+      if (kind === 'volatility') return { cell: 'ALL', cause: `Volatility index ${pr.vol.index.toFixed(2)}× normal (alert ${app.prog.volTh}×)`, indicators: { index: +pr.vol.index.toFixed(3) } };
+      if (kind === 'health') return { cell: 'ALL', cause: `Health index ${pr.health.index.toFixed(1)} (alert below ${app.prog.healthTh})`, indicators: { index: +pr.health.index.toFixed(2) } };
+      if (kind === 'recall') return { cell: 'ALL', cause: `Inflation ${pr.board.pi?.toFixed(2)}% against the recall trigger ${app.prog.recallTh}%: ${pr.recall.share.toFixed(2)}% of PHX recalled`, indicators: { pi: +(pr.board.pi ?? 0).toFixed(3), share: +pr.recall.share.toFixed(3) } };
+      if (kind === 'commodity') { const it = pr.basket.items.find(x => x.k === id); return { cell: it.label, cause: `${it.label} €${it.price.toFixed(1)} (${it.period}) against the band €${it.lower.toFixed(1)}–${it.upper.toFixed(1)} around its five-year average`, indicators: { price: +it.price.toFixed(2), lower: +it.lower.toFixed(2), upper: +it.upper.toFixed(2) } }; }
+      if (kind === 'housing') { const r = pr.bubble.rows.find(x => x.c.id === id); return { cell: id, cause: `${r.c.name} house prices (${r.quarter}): real growth ${r.real.toFixed(1)}%, gap from trend ${r.gap == null ? 'n/a' : r.gap.toFixed(1) + '%'}, loans to households ${pr.bubble.credit == null ? 'n/a' : pr.bubble.credit.toFixed(1) + '%'}; ${r.n} of 3 signals`, indicators: { real: +r.real.toFixed(2), gap: r.gap == null ? null : +r.gap.toFixed(2), signals: r.n } }; }
+      if (kind === 'currency') { const r = pr.fx.rows.find(x => x.ccy === id); return { cell: id, cause: `${id} ${r.dep >= 0 ? 'down' : 'up'} ${Math.abs(r.dep).toFixed(1)}% against the ${r.against} since ${r.from} (trigger ${app.prog.devalTh}%)`, indicators: { depreciation: +r.dep.toFixed(2) } }; }
+      return { cell: 'ALL', cause: key, indicators: {} };
+    };
+    let changed = false;
+    for (const [key, st] of Object.entries(next)) {
+      const before = prev[key] ?? (QUIET.has(st) ? st : null);
+      if (before === st) continue;
+      changed = true;
+      const from = before ?? 'START';
+      try { const w = why(key); await append(app.ledger, { kind: 'LIVE', cell: w.cell, type: `${key.split(':')[0].toUpperCase()}_${from}→${st}`, cause: w.cause, indicators: w.indicators }); } catch {}
+    }
+    if (changed || Object.keys(prev).length !== Object.keys(next).length) { await kvSet('prog:' + app.region, next); if (changed) { await kvSet('ledger', app.ledger); emit(); } }
+  }
 
   // One nowcast pass at a time; a request that arrives during a pass runs once it has finished.
   let nowcasting = null, nowcastAgain = false;
@@ -186,7 +239,7 @@ export function createApp() {
     await kvSet('ledger', app.ledger);
     if (navigator.onLine) app.anchorLedger().catch(() => {});
   };
-  app.clearLedger = async () => { app.ledger = []; app.ledgerOk = null; await kvSet('ledger', []); await kvSet('live:' + app.region, {}); try { await registerKey(); } catch {} emit(); nowcast(); };
+  app.clearLedger = async () => { app.ledger = []; app.ledgerOk = null; await kvSet('ledger', []); await kvSet('live:' + app.region, {}); await kvSet('prog:' + app.region, {}); try { await registerKey(); } catch {} emit(); nowcast().then(signalPass); };
 
   app.start = async () => {
     app.ledger = (await kvGet('ledger')) || [];
