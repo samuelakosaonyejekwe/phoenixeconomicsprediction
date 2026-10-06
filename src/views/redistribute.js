@@ -31,10 +31,12 @@ export function redistribute(root, app) {
 
   const blocks = [pageHead('Redistribution & wallets', 'How absorbed surplus becomes PHX credits, is released into wallets once inflation eases, travels to economies with slack along the routing kernel, and is recalled before wallets overheat (Solutions §4.5–4.7).'), kpis];
 
+  // One group of cards, so that they are arranged together.
+  const top = [];
   if (N > 1) {
     const pi = cells.map(c => c.pi);
     const K = kernelMatrix(cells, pi, P);
-    blocks.push(h('div', { class: 'grid-2' },
+    top.push(
       card({
         title: 'Routing kernel now', sub: 'Rows: source, columns: target. K = distance weight (reach widened by local inflation dispersion) × need of the target × export propensity of the source × room of the target below the trigger, within a currency area (Solutions §4.6).',
         body: heatMatrix({ matrix: K, labels: cells.map(c => c.id), fmt: v => (v === 0 ? '0' : Math.abs(v) >= 0.01 ? num(v, 3) : Number(v.toPrecision(2)).toString()), title: 'K' }),
@@ -46,12 +48,12 @@ export function redistribute(root, app) {
           h('b', null, f.from.name), h('span', { class: 'arrow', 'aria-hidden': 'true' }, '→'), h('b', null, f.to.name),
           h('span', { class: 'muted' }, `${num(distanceKm(f.from, f.to), 0)} km`), h('span', { class: 'v' }, eur(f.v, 2)))))
           : h('p', { class: 'sub' }, 'No corridors open: either no economy above target holds wallet liquidity yet, or no neighbour has room below the trigger (Solutions §4.6).'),
-      })));
+      }));
   }
 
   const rows = cells.map((c, i) => ({ label: c.name, sub: `${lastMode[i] === 'dragon' ? 'Crisis mode' : 'Stable'} · H ${num(lastH[i], 2)}`, segments: [{ name: 'Wallet liquidity L', value: lastL[i], color: SERIES[0] }], marker: sim.Lcap[i] }))
     .sort((a, b) => b.segments[0].value - a.segments[0].value);
-  blocks.push(h('div', { class: 'grid-2' },
+  blocks.push(h('div', { class: 'grid-2' }, ...top,
     card({ title: `Wallet liquidity at month ${P.months}`, sub: 'Tick = wallet capacity; recall begins at the saturation threshold',
       body: stackedBars({ rows, fmt: v => eur(v, 2), markerLabel: 'Capacity' }),
       table: () => ({ cols: ['Economy', 'L €bn', 'Capacity €bn', 'Saturation H', 'Mode'], rows: cells.map((c, i) => [c.name, num(lastL[i], 3), num(sim.Lcap[i], 2), num(lastH[i], 3), lastMode[i]]) }) }),

@@ -116,8 +116,15 @@ kbd { border: 1px solid var(--line-2); border-bottom-width: 2px; border-radius: 
 @media (max-width: 1100px) { .grid-2, .grid-3 { grid-template-columns: minmax(0, 1fr); } }
 
 .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 16px; box-shadow: var(--shadow); min-width: 0; }
-.card-h { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 10px; flex-wrap: wrap; }
-.card-h > div:first-child { min-width: 0; flex: 1 1 220px; }
+/* Title and actions share the first line where both fit, otherwise the actions take their own; the
+   subtitle runs the full width of the card beneath them. */
+.card-h { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: 4px 12px; margin-bottom: 10px; }
+.card-h > div:first-child { display: contents; }
+.card-h h3 { flex: 1 1 9rem; min-width: 0; }
+.card-h .sub { flex: 1 0 100%; order: 3; }
+.card-h .card-a { flex: 0 1 auto; max-width: 100%; min-width: 0; }
+.card-h .card-a .row { flex-wrap: wrap; }
+.card-h .card-a:empty { display: none; }
 .card-a { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
 .card-body { min-width: 0; }
 
@@ -217,7 +224,7 @@ button.bar-row:hover { background: var(--surface-2); }
 .bar-mark { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--ink); border-radius: 1px; }
 .bar-v { font-size: 0.82rem; font-variant-numeric: tabular-nums; color: var(--ink-2); min-width: 64px; text-align: right; }
 
-.tiles { display: grid; gap: 4px; }
+.tiles { display: grid; gap: 4px; max-width: 720px; margin-inline: auto; }
 .tile { aspect-ratio: 1; border: 0; border-radius: 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 2px; min-width: 0; transition: transform .12s; }
 .tile b { font-size: clamp(0.7rem, 0.55rem + 0.6vw, 0.95rem); }
 .tile small { font-size: clamp(0.55rem, 0.45rem + 0.4vw, 0.72rem); white-space: nowrap; }
@@ -349,6 +356,7 @@ input[type="range"] { accent-color: var(--brand); height: 22px; }
 
 /* Guide */
 .install { display: flex; flex-direction: column; gap: 14px; align-items: flex-start; }
+.install > .grid-3 { align-self: stretch; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
 .how { background: var(--surface-2); border-radius: 12px; padding: 12px 14px; }
 .how.hl { box-shadow: inset 0 0 0 2px var(--brand); }
 .how ol, .steps { padding-left: 20px; margin: 6px 0 0; }
@@ -397,6 +405,17 @@ button[data-tip], a[data-tip], summary[data-tip], label[data-tip], select[data-t
   .explain > div > p:first-child { margin-top: 0; }
 }
 .grid-3 > .card, .grid-2 > .card { min-width: 0; }
+/* Cards arranged by measured height (ui/balance.js): columns filled independently, long cards across the row. */
+.bal { display: flex; flex-direction: column; }
+.bal-row { display: grid; gap: 16px; }
+.bal-col { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+/* What difference remains between two columns is shared by the cards of the shorter one. */
+.bal-col > * { flex: 1 1 auto; }
+.bal-m { align-items: start; }
+.bal-m .bal-col { align-self: start; }
+/* A card across the whole row sets its lists and controls in columns. */
+.wide .steps, .wide .alerts, .wide .flows, .wide .mirrors { columns: 2 340px; column-gap: 32px; }
+.wide .steps > li, .wide .alerts > li, .wide .flows > li, .wide .mirrors > li { break-inside: avoid; }
 @media (min-width: 1100px) and (max-width: 1400px) { .grid-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); } .grid-3 > :last-child:nth-child(odd) { grid-column: 1 / -1; } }
 
 /* Policy optimiser result */

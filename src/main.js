@@ -18,7 +18,7 @@ import { markets } from './views/markets.js';
 import { programmes } from './views/programmes.js';
 import { openCountry } from './views/common.js';
 import { annotate, installTips, retip } from './ui/annotate.js';
-import { balance } from './ui/balance.js';
+import { balance, arrange } from './ui/balance.js';
 import { PAGES } from './content/tips.js';
 
 const ROUTES = [
@@ -146,6 +146,7 @@ function render() {
   } else { scrollTo(0, 0); main.focus({ preventScroll: true }); }
   annotate(main);
   balance(main);
+  arrange(main);
   requestAnimationFrame(retip);
   document.title = `${r.label} · Phoenix Economics`;
   lastRoute = r.id;
@@ -159,10 +160,10 @@ new MutationObserver(muts => {
   // Chart drawing adds many SVG nodes; only HTML additions can carry labels or grids.
   const roots = new Set();
   for (const m of muts) for (const n of m.addedNodes) if (n.nodeType === 1 && !(n instanceof SVGElement)) roots.add(n.parentElement || n);
-  for (const r of roots) { annotate(r); balance(r); }
+  for (const r of roots) { annotate(r); balance(r); arrange(r); }
 }).observe(document.body, { childList: true, subtree: true });
 let resizeRaf = 0;
-addEventListener('resize', () => { cancelAnimationFrame(resizeRaf); resizeRaf = requestAnimationFrame(() => balance(document)); });
+addEventListener('resize', () => { cancelAnimationFrame(resizeRaf); resizeRaf = requestAnimationFrame(() => { balance(document); arrange(document); }); });
 let raf = 0;
 app.rerender = () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(render); };
 app.on((_, kind) => (kind === 'status' ? updateChrome() : app.rerender()));

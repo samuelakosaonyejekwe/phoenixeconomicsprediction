@@ -120,7 +120,7 @@ export function overview(root, app) {
     card({ title: 'The Phoenix closed loop, now', sub: 'Detect → activate → absorb → convert → redistribute → stabilise → feedback / recall (Solutions §2, §4)', body: loop, cls: 'span-2' }),
     h('div', { class: 'grid-2' },
       card({ title: app.region === 'global' ? 'Global monitor' : 'European monitor', sub: 'Select an economy for detail', actions: seg, body: h('div', null, mapHost, legendHost) }),
-      h('div', { class: 'stack' }, proj, alertCard)),
+      alertCard, proj),
     markets,
     objectiveChips([1, 7, 8, 12]),
     sourceLine(app));
