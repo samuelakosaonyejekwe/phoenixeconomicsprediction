@@ -44,19 +44,12 @@ export function annotate(root) {
   surround(root);
 }
 
-// Beyond labels: whatever the pointer rests on explains itself. A headline tile, a card header and a
-// page heading take the explanation of their label; a meter says what its bar shows; every table cell
-// says which row and column it belongs to and what the column means.
+// Beyond labels: a headline tile takes the explanation of its label, a meter says what its bar shows and
+// a table cell says what its column means. Text that is itself an explanation gets none.
 const text = el => (el ? el.textContent.replace(/\s+/g, ' ').trim() : '');
 const within = (root, sel) => [...(root.matches?.(sel) ? [root] : []), ...root.querySelectorAll(sel)];
 function surround(root) {
   for (const el of within(root, '.kpi, .mkt')) { const t = el.querySelector('.kpi-l')?.dataset.tip; if (t && !el.dataset.tip) el.dataset.tip = t; }
-  for (const el of within(root, '.card-h')) { const t = el.querySelector('h3')?.dataset.tip; if (t && !el.dataset.tip) el.dataset.tip = t; }
-  for (const el of within(root, '.page-h')) {
-    if (el.dataset.tip) continue;
-    const id = location.hash.split('?')[0].slice(2) || 'overview';
-    el.dataset.tip = PAGES[id] || text(el.querySelector('.lead')) || text(el.querySelector('h1'));
-  }
   for (const el of within(root, '.meter')) if (!el.dataset.tip) el.dataset.tip = `${el.getAttribute('aria-label') || text(el.querySelector('.meter-top span'))}: ${text(el.querySelector('.meter-top b'))}. The bar fills towards its limit and turns amber, then red, as it approaches it.`;
   for (const el of within(root, '.ledger > li')) if (!el.dataset.tip) el.dataset.tip = 'One signed entry of the audit ledger: what changed, when, the values that caused it, and the start of its hash.';
   for (const el of within(root, '.obj-chip, .state-pill')) if (!el.dataset.tip && el.getAttribute('title')) { el.dataset.tip = el.getAttribute('title'); el.removeAttribute('title'); }
@@ -66,9 +59,6 @@ function surround(root) {
   for (const el of within(root, '.hero-fig')) if (!el.dataset.tip) el.dataset.tip = 'Projected inflation at the end of the horizon with Phoenix, and without it in brackets; the difference is Phoenix’s effect.';
   for (const el of within(root, '.src-line')) if (!el.dataset.tip) el.dataset.tip = 'Publishers of the data on this page and when it was last fetched; the Data & status page lists every source.';
   for (const el of within(root, 'ol.flows > li')) if (!el.dataset.tip) { const b = el.querySelectorAll('b'); el.dataset.tip = `Wallet liquidity routed from ${text(b[0])} to ${text(b[1])} over the horizon: ${text(el.querySelector('.v'))}, across ${text(el.querySelector('.muted'))}.`; }
-  for (const el of within(root, '.state-legend > div')) if (!el.dataset.tip) el.dataset.tip = `${text(el.querySelector('.badge'))}: ${text(el.querySelector(':scope > span:last-child'))}`;
-  for (const el of within(root, 'dl.io > dd')) if (!el.dataset.tip) { const dt = el.previousElementSibling; if (dt?.tagName === 'DT') { const t = `${text(dt)}: ${text(el)}`.slice(0, 400); el.dataset.tip = t; if (!dt.dataset.tip) dt.dataset.tip = t; } }
-  for (const el of within(root, 'details.explain > div')) if (!el.dataset.tip) el.dataset.tip = `${text(el.previousElementSibling)}: the method behind this page, in plain words.`;
   // Anything else inside a card is explained by the card; anything else on the page by the page.
   for (const el of within(root, '.card')) { const t = el.querySelector('h3')?.dataset.tip; if (t) for (const part of el.querySelectorAll(':scope > .card-body, :scope > .tbl-host, :scope > .legend')) if (!part.dataset.tip) { part.dataset.tip = t; part.dataset.tipScope = 'card'; } }
   const main = document.getElementById('main');
@@ -83,21 +73,31 @@ function surround(root) {
         if (cell.dataset.tip) continue;
         const head = heads[cell.cellIndex], col = text(head), about = head?.dataset.tip;
         const value = text(cell);
-        cell.dataset.tip = cell.cellIndex === 0
-          ? `${value || 'Row'}${col ? ` — ${col}` : ''}${about ? `: ${about}` : ''}`
-          : `${rowName}${col ? ` · ${col}` : ''}${value ? ` = ${value}` : ''}${about ? `. ${about}` : ''}`;
+        // Without an explanation of the column there is nothing to add to what the cell already shows.
+        if (!about) continue;
+        cell.dataset.tip = cell.cellIndex === 0 ? `${col}: ${about}` : `${rowName} · ${col}: ${about}`;
       }
     }
   }
 }
 
+const PROSE = 'p, li, dd, dt, h1, h2, h4, .sub, .lead, .state-legend, .explain, .notes';
+const plain = t => String(t).replace(/\s*\((?:Solutions\s+)?(?:§|Table|Figure)[^)]*\)/g, '').replace(/\s+/g, ' ').trim().toLowerCase();
+let pageText = '', pageAt = 0;
+function onPage(tip) {
+  const t = plain(tip);
+  if (t.length < 25) return false;
+  if (Date.now() - pageAt > 400) { pageText = plain(document.getElementById('main')?.innerText || ''); pageAt = Date.now(); }
+  return pageText.includes(t);
+}
+
 // One tooltip for the whole document: shown on hover, focus or tap of any element with data-tip.
-let lastX = -1, lastY = -1, showFor = null;
+let lastX = -1, lastY = -1, showFor = null, tipTarget = null;
 // After a redraw the element under the pointer is new: show its explanation again if the pointer is
 // still over a label (a redraw never moves the pointer).
 export function retip() {
   if (lastX < 0 || !showFor) return;
-  const el = document.elementFromPoint(lastX, lastY)?.closest?.('[data-tip]');
+  const at = document.elementFromPoint(lastX, lastY), el = at && tipTarget ? tipTarget(at) : null;
   if (el) showFor(el);
 }
 
@@ -112,10 +112,20 @@ export function installTips(doc = document) {
   showFor = show;
   doc.addEventListener('pointermove', e => { lastX = e.clientX; lastY = e.clientY; }, { passive: true });
   // Charts, maps and bars show their own live values: a surrounding explanation stays out of their way.
-  const tipFor = t => { const el = t.closest?.('[data-tip]'), own = t.closest?.(`${OWN}, .chart`); return el && own && el !== own && el.contains(own) ? null : el; };
+  const tipFor = t => {
+    const el = t.closest?.('[data-tip]'), own = t.closest?.(`${OWN}, .chart`);
+    if (!el || own && el !== own && el.contains(own)) return null;
+    // Running text is its own explanation: the card's or the page's is not repeated over it.
+    if (el.dataset.tipScope && t.closest(PROSE)) return null;
+    // A state badge needs none on a page whose legend spells out every state.
+    if (el.classList.contains('badge') && [...document.querySelectorAll('#main .state-legend .badge')].some(b => b.textContent.trim() === el.textContent.trim())) return null;
+    // Nor is an explanation that can already be read on the page.
+    return onPage(el.dataset.tip) ? null : el;
+  };
+  tipTarget = tipFor;
   doc.addEventListener('pointerover', e => { lastX = e.clientX; lastY = e.clientY; const el = tipFor(e.target); if (el && el !== cur) show(el); else if (!el && cur) hide(); });
   doc.addEventListener('pointerdown', e => { if (!e.target.closest?.('[data-tip]')) hide(); });
-  doc.addEventListener('focusin', e => { const el = e.target.closest?.('[data-tip]'); if (el) show(el); });
+  doc.addEventListener('focusin', e => { const el = tipFor(e.target); if (el) show(el); });
   doc.addEventListener('focusout', hide);
   doc.addEventListener('keydown', e => { if (e.key === 'Escape') hide(); });
   addEventListener('scroll', hide, { passive: true });

@@ -38,9 +38,9 @@ for (const r of ['overview', 'detect', 'simulate', 'redistribute', 'contracts', 
   const text = await page.locator('main').innerText();
   if (text.length < 200) fail(`page ${r} is nearly empty`);
   if (/\bNaN\b|undefined/.test(text)) fail(`page ${r} shows NaN or undefined`);
-  // Every visible label, headline figure, table cell, meter and heading explains itself on hover (src/ui/annotate.js); map tiles, bars and chart points
+  // Every visible label, headline tile and meter explains itself on hover (src/ui/annotate.js); map tiles, bars and chart points
   // show their own values.
-  const bare = await page.evaluate(() => [...document.querySelectorAll('main :is(h3, .kpi-l, th[scope=col], .legend li, .badge, button, .chip, summary, label, .ctrl-l, td, th[scope=row], .kpi, .kpi-v, .kpi-s, .meter, h1, .card-h .sub), nav a, #top button, #top select')]
+  const bare = await page.evaluate(() => [...document.querySelectorAll('main :is(h3, .kpi-l, th[scope=col], .legend li, .badge, button, .chip, summary, label, .ctrl-l, .kpi, .meter), nav a, #top button, #top select')]
     .filter(e => !e.closest('.tile, .dotg, .bar-row, .bar-seg, .cell') && e.textContent.trim() && e.offsetParent !== null && !e.closest('[data-tip]:not([data-tip-scope])'))
     .map(e => e.textContent.trim().replace(/\s+/g, ' ').slice(0, 60)));
   if (bare.length) fail(`page ${r}: labels without an explanation: ${bare.join(' | ')}`);
@@ -48,6 +48,12 @@ for (const r of ['overview', 'detect', 'simulate', 'redistribute', 'contracts', 
   // that explains itself, in its card, or at least in the page.
   const silent = await page.evaluate(() => { const w = document.createTreeWalker(document.querySelector('main'), NodeFilter.SHOW_TEXT); let n, k = 0; while ((n = w.nextNode())) { const el = n.parentElement; if (n.textContent.trim() && el && el.getClientRects().length && !el.closest('[data-tip], .tile, .dotg, .bar-row, .bar-seg, .cell, .chart')) k++; } return k; });
   if (silent) fail(`page ${r}: ${silent} pieces of text show no explanation on hover`);
+  // What the page already explains in words is not repeated on hover: a state legend's badges and text.
+  const legend = page.locator('main .state-legend .badge').first();
+  if (await legend.count()) {
+    await legend.hover(); await page.waitForTimeout(250);
+    if (await page.locator('.tip').evaluate(e => getComputedStyle(e).display !== 'none').catch(() => false)) fail(`page ${r}: a legend that is explained on the page also shows a hover explanation`);
+  }
   const first = page.locator('main h3[data-tip]').first();
   if (await first.count()) {
     await first.hover();
