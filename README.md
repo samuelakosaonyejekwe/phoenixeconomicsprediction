@@ -76,7 +76,7 @@ The app is a Progressive Web App: installable on Windows, macOS, Linux, ChromeOS
 
 ## Develop
 
-Node 20 or later (CI uses 22); `npm run paper` also needs Python 3 with numpy and matplotlib.
+Node 20 or later (CI uses 22; the two deploy scripts run the deployment tool under Node 22 themselves); `npm run paper` also needs Python 3 with numpy and matplotlib.
 
 ```sh
 npm ci
