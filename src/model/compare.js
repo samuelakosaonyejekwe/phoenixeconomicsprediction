@@ -1,6 +1,7 @@
 // Compares reproduced results with the published ones (paper/results-2026-10-04.json). Both sides are
-// taken through JSON; every key on either side is compared, and numbers must agree to a relative
-// tolerance of 1e-9 (the same code on the same data gives identical floating-point results).
+// taken through JSON; within each section compared, every key on either side is compared, and numbers
+// must agree to a relative tolerance of 1e-9 (the same code on the same data gives identical
+// floating-point results; the tolerance allows for a different arithmetic library).
 const canon = v => JSON.parse(JSON.stringify(v));
 
 export function compareResults(reproduced, published, { rel = 1e-9, abs = 1e-12, only = null } = {}) {
@@ -20,8 +21,8 @@ export function compareResults(reproduced, published, { rel = 1e-9, abs = 1e-12,
     const keys = Array.isArray(a) ? [...Array(Math.max(a.length, b?.length ?? 0)).keys()] : [...new Set([...Object.keys(a), ...Object.keys(b || {})])];
     for (const k of keys) walk(a[k], b?.[k], path ? `${path}.${k}` : String(k));
   };
-  // Every key either side holds is compared, so nothing published can be skipped silently; `only`
-  // restricts the comparison to the sections the caller reproduced.
+  // Sections: those reproduced, or those named in `only`. Within a section every key either side holds
+  // is compared, so nothing published in it can be skipped silently.
   for (const k of only || Object.keys(got)) walk(got[k], published[k], k);
   return { checked, matched: checked - mismatches.length, mismatches };
 }

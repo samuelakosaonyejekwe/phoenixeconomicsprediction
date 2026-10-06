@@ -1,6 +1,6 @@
-import { h, icon, num, eur, pct, clear, ago } from '../ui/dom.js';
-import { lineChart, card, legendEl, SERIES, stackedBars } from '../ui/charts.js';
-import { SECTORS, surplusOf } from '../model/inputs.js';
+import { h, icon, num, eur, pct, ago } from '../ui/dom.js';
+import { lineChart, card, SERIES, stackedBars } from '../ui/charts.js';
+import { SECTORS } from '../model/inputs.js';
 import { OBJECTIVES } from '../content/framework.js';
 
 export const STATE_META = {
@@ -68,7 +68,7 @@ export function openCountry(app, cell) {
       h('button', { class: 'icon-btn', 'aria-label': 'Close', onclick: () => dlg.close() }, icon('close'))),
     h('div', { class: 'drawer-b' },
       h('div', { class: 'kpis' },
-        kpi({ label: 'Excess deposits', value: eur(st.S), sub: `S_crit ${eur(st.Scrit)} · ratio ${num(st.rho, 2)}${cell.idle ? ` · overnight and savings ${eur((cell.idle.hh || 0) + (cell.idle.corp || 0) + (cell.idle.gov || 0))}` : ''}` }),
+        kpi({ label: 'Excess deposits', value: eur(st.S), sub: `S_crit ${eur(st.Scrit)} · ratio ${num(st.rho, 2)}${cell.idle ? ` · currency and transferable deposits ${eur((cell.idle.hh || 0) + (cell.idle.corp || 0) + (cell.idle.gov || 0))}` : ''}` }),
         kpi({ label: 'Breach probability (12 m)', value: `${num(fc.pBreach * 100, 0)}%`, sub: fc.firstBreach === 0 ? 'Already above trigger' : fc.firstBreach ? `Trigger in ≈${fc.firstBreach} months` : 'No breach projected' }),
         kpi({ label: 'Steady-state activation Θ*', value: num(st.thetaStar, 2), sub: `π_th ${P.piTh}%` }),
         kpi({ label: 'Unemployment and output gap', value: `${pct(cell.unemp)} · ${num(cell.x0 ?? 0, 1)}%`, sub: `gap from GDP (HP trend)${cell.gapUpdate ? `, ${num(cell.gapUpdate, 2)} pp from monthly unemployment` : ''} · gov. balance ${cell.govPct == null ? 'n/a' : pct(cell.govPct)} of GDP` }),
@@ -101,7 +101,6 @@ export function sourceLine(app) {
   const at = Object.values(app.status).map(s => s.at).filter(Boolean).sort().pop();
   const live = Object.values(app.status).filter(s => s.state === 'live').length;
   return h('p', { class: 'src-line' }, icon('db', 14),
-    `Official data: Eurostat, ECB, World Bank, IMF, INSEE, DBnomics. ${live ? `${live} sources refreshed live` : 'Showing stored data'} · latest ${ago(at)}.`);
+    `Official data: Eurostat, ECB (some rates via Frankfurter), World Bank, IMF, INSEE, BIS, U.S. EIA via FRED, DBnomics. ${live ? `${live} sources refreshed live` : 'Showing stored data'} · latest ${ago(at)}.`);
 }
 
-export { clear, surplusOf };

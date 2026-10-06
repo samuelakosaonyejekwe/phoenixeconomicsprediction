@@ -13,8 +13,11 @@ export function slider(app, meta) {
   const TAG = { D: 'Estimated from data (Solutions §3, §5.1–5.3)', L: 'Taken from the empirical literature (Solutions §5.4)', P: 'Policy design choice (Solutions §7.6)', M: 'To be measured by the randomised trials (Solutions §10)', N: 'Numerical setting (Solutions §8)' };
   const tag = meta.cal ? h('span', { class: 'cal', 'data-tip': `${TAG[meta.cal] || ''}${meta.ext ? '; optional lever, neutral by default' : ''}` }, meta.cal) : meta.ext ? h('span', { class: 'ext', 'data-tip': 'Optional lever, neutral by default' }, 'ext') : null;
   if (meta.options) {
-    return h('label', { class: 'ctrl', for: id, 'data-tip': meta.help }, h('span', { class: 'ctrl-l' }, meta.label, tag, help),
-      h('select', { id, onchange: e => app.setParam(meta.k, e.target.value) }, meta.options.map(([val, lab]) => h('option', { value: val, selected: val === v }, lab))));
+    const changed = meta.def !== v, defLabel = meta.options.find(o => o[0] === meta.def)?.[1] ?? meta.def;
+    return h('div', { class: ['ctrl', changed && 'changed'] },
+      h('label', { class: 'ctrl-l', for: id, 'data-tip': meta.help }, meta.label, tag, help),
+      h('select', { id, onchange: e => app.setParam(meta.k, e.target.value) }, meta.options.map(([val, lab]) => h('option', { value: val, selected: val === v }, lab))),
+      changed ? h('button', { class: 'reset', type: 'button', 'data-tip': `Return to the paper’s choice: ${defLabel}`, onclick: () => app.setParam(meta.k, meta.def) }, 'default') : null);
   }
   if (meta.bool) {
     return h('label', { class: 'ctrl ctrl-row', for: id, 'data-tip': meta.help }, h('input', { id, type: 'checkbox', checked: !!v, onchange: e => app.setParam(meta.k, e.target.checked) }), h('span', { class: 'ctrl-l' }, meta.label, tag, help));

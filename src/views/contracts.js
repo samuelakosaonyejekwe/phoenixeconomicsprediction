@@ -15,7 +15,7 @@ export function contracts(root, app) {
     .sort((a, b) => ['ACTIVE', 'ARMED', 'WATCH', 'DORMANT'].indexOf(a.st.state) - ['ACTIVE', 'ARMED', 'WATCH', 'DORMANT'].indexOf(b.st.state) || b.st.thetaStar - a.st.thetaStar);
 
   const table = h('div', { class: 'tbl-wrap' }, h('table', { class: 'tbl' },
-    h('thead', null, h('tr', null, ['Economy', 'State', 'Inflation', 'vs trigger', 'S / S_crit', 'Θ* activation', 'P(breach 12 m)', ''].map(c => h('th', { scope: 'col' }, c)))),
+    h('thead', null, h('tr', null, ['Economy', 'State', 'Inflation', 'vs trigger', 'S / S_crit', 'Θ* activation', 'P(breach 12 m)', 'Detail'].map(c => h('th', { scope: 'col' }, c)))),
     h('tbody', null, rows.map(({ c, st }) => h('tr', null,
       h('th', { scope: 'row' }, c.name), h('td', null, badge(st.state)), h('td', null, `${pct(c.pi)} `, h('small', { class: 'muted' }, c.piPeriod)),
       h('td', null, `${c.pi - P.piTh >= 0 ? '+' : ''}${num(c.pi - P.piTh, 1)} pp`), h('td', null, `${num(st.rho, 2)}×`),
@@ -29,17 +29,17 @@ export function contracts(root, app) {
   const list = [...app.ledger].reverse().filter(e => kindFilter === 'ALL' || e.kind === kindFilter);
   const vk = app.ledgerOk;
   const verifyOut = h('span', { class: 'verify' }, vk ? (vk.ok ? h('span', { class: 'badge t-good' }, icon('ok', 14), `Chain intact · ${vk.count} entries, all signed with the registered key${vk.keyPeriods?.length > 1 ? ` (key replaced ${vk.keyPeriods.length - 1}×, each registration recorded)` : ''}${vk.anchorCheck ? ` · ${vk.anchorCheck.matched}/${vk.anchorCheck.checked} anchors verified${vk.anchorCheck.rekorVerified ? ` (${vk.anchorCheck.rekorVerified} directly against Rekor)` : ''}${vk.anchorCheck.unreachable ? ` · ${vk.anchorCheck.unreachable} not verifiable now (log unreachable or offline)` : ''}` : ''}`) : h('span', { class: 'badge t-crit' }, icon('alert', 14), `Failed at #${vk.at}: ${vk.reason}`)) : null);
-  const filter = h('div', { class: 'seg' }, [['ALL', 'All'], ['LIVE', 'Live data'], ['SIM', 'Simulation']].map(([k, l]) => h('button', { class: kindFilter === k ? 'on' : '', onclick: () => { kindFilter = k; app.rerender(); } }, l)));
+  const filter = h('div', { class: 'seg' }, [['ALL', 'All'], ['LIVE', 'Live data'], ['SIM', 'Simulation']].map(([k, l]) => h('button', { class: kindFilter === k ? 'on' : '', 'aria-pressed': String(kindFilter === k), onclick: () => { kindFilter = k; app.rerender(); } }, l)));
   const ledger = card({
     title: `Audit ledger (${app.ledger.length} entries)`, sub: 'Every trigger records time, cause, amount and indicators; entries are hash-chained, signed on this device (ECDSA P-256) and anchored in the public Sigstore Rekor transparency log (Solutions §9.4).',
     actions: h('div', { class: 'row wrap' }, filter,
       h('button', { class: 'btn btn-s', onclick: () => app.verifyLedger() }, icon('shield', 16), 'Verify'),
       h('button', { class: 'btn btn-s btn-ghost', onclick: async () => { try { await app.anchorLedger(); toast('Chain head entered in the public transparency log; receipt recorded.'); } catch (e) { toast(String(e.message || e)); } } }, icon('db', 16), 'Anchor'),
-      h('button', { class: 'btn btn-s btn-ghost', onclick: () => download('phoenix-audit-ledger.csv', toCSV(app.ledger), 'text/csv') }, icon('download', 16), 'CSV'),
+      h('button', { class: 'btn btn-s btn-ghost', 'data-tip': 'Download the audit ledger as CSV, with hashes, signatures and receipts.', onclick: () => download('phoenix-audit-ledger.csv', toCSV(app.ledger), 'text/csv') }, icon('download', 16), 'CSV'),
       h('button', { class: 'btn btn-s btn-ghost', onclick: () => download('phoenix-audit-ledger.json', JSON.stringify(app.ledger, null, 2)) }, icon('download', 16), 'JSON'),
-      h('button', { class: 'btn btn-s btn-ghost', onclick: () => { if (confirm('Clear the local audit ledger on this device?')) { app.clearLedger(); toast('Ledger cleared.'); } } }, 'Clear')),
+      h('button', { class: 'btn btn-s btn-ghost', 'data-tip': 'Delete the ledger on this device and start a new one.', onclick: () => { if (confirm('Clear the local audit ledger on this device?')) { app.clearLedger(); toast('Ledger cleared.'); } } }, 'Clear')),
     body: h('div', null, verifyOut, list.length ? h('ol', { class: 'ledger' }, list.slice(0, 150).map(e => h('li', null,
-      h('div', { class: 'lg-top' }, h('span', { class: ['kind', e.kind === 'LIVE' ? 'k-live' : 'k-sim'] }, e.kind), h('b', null, e.cell), h('span', null, e.type.replace(/_/g, ' ')), h('time', { datetime: e.ts }, dateTime(e.ts))),
+      h('div', { class: 'lg-top' }, h('span', { class: ['kind', e.kind === 'LIVE' ? 'k-live' : e.kind === 'SIM' ? 'k-sim' : 'k-audit'] }, e.kind), h('b', null, e.cell), h('span', null, e.type.replace(/_/g, ' ')), h('time', { datetime: e.ts }, dateTime(e.ts))),
       h('p', null, e.cause),
       e.converted !== undefined && e.converted !== null ? h('p', { class: 'muted' }, `Converted to date: ${eur(e.converted, 2)}${e.into ? ` · into ${e.into}` : ''}`) : null,
       h('code', { class: 'hash', title: `prev ${e.prev}` }, `#${e.seq} ${e.hash.slice(0, 16)}…`))))

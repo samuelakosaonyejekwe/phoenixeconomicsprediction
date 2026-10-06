@@ -4,7 +4,6 @@ import { targetAt } from './targets.js';
 import { hln, betaInc } from './stats.js';
 
 const mean = a => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : 0);
-const clip = (x, a, b) => Math.min(b, Math.max(a, x));
 
 // Hodrick–Prescott trend (solves (I + λD'D)τ = y with a dense pentadiagonal system).
 export function hpFilter(y, lambda = 100) {
@@ -36,21 +35,7 @@ export function hpFilter(y, lambda = 100) {
 }
 
 
-// Natural rate and output gap for every EU economy and year from the same definitions as the model.
-function gapPanel(imf, okun, members) {
-  const out = {};
-  for (const c of members) {
-    const I = imf?.[c.iso3];
-    if (!I?.unemp) continue;
-    const u = I.unemp.filter(r => +r[0] >= 1999);
-    if (u.length < 10) continue;
-    const tr = hpFilter(u.map(r => r[1]), 100);
-    out[c.iso3] = Object.fromEntries(u.map((r, i) => [+r[0], -okun.of(c.iso3) * (r[1] - tr[i])]));
-  }
-  return out;
-}
 
-const ANCHOR_IN_SAMPLE = { POL: 2.5, HUN: 3, ROU: 2.5 };
 
 
 function invert(A) {
@@ -219,42 +204,9 @@ export function estimateOkunGap(imf, gaps, members = EU, y0 = 2000, y1 = 2025) {
   return { pooled: 1 / bP, bPooled: bP, beta, n: rows.length, of: iso => beta[iso] ?? 1 / bP };
 }
 
-// Calendar-year means of a monthly series (complete years only).
-export function annualMeans(rows) {
-  const by = {};
-  for (const [m, v] of rows || []) (by[+m.slice(0, 4)] ||= []).push(v);
-  return Object.fromEntries(Object.entries(by).filter(([, v]) => v.length === 12).map(([y, v]) => [+y, mean(v)]));
-}
 
 
 
-function panelOLS(rows, names, yearEffects) {
-  const K = names.length, keys = yearEffects ? ['c', 'y'] : ['c'];
-  const demean = v => {
-    for (let it = 0; it < (yearEffects ? 30 : 1); it++) for (const key of keys) {
-      const sum = {}, n = {};
-      rows.forEach((r, i) => { sum[r[key]] = (sum[r[key]] || 0) + v[i]; n[r[key]] = (n[r[key]] || 0) + 1; });
-      v = v.map((x, i) => x - sum[rows[i][key]] / n[rows[i][key]]);
-    }
-    return v;
-  };
-  const Y = demean(rows.map(r => r.dp)), X = names.map(nm => demean(rows.map(r => r[nm])));
-  const XtX = names.map((_, a) => names.map((__, b) => X[a].reduce((s, v, i) => s + v * X[b][i], 0)));
-  const inv = invert(XtX);
-  const Xty = names.map((_, j) => X[j].reduce((t, x, i) => t + x * Y[i], 0));
-  const beta = inv.map(r => r.reduce((s, v, j) => s + v * Xty[j], 0));
-  const res = Y.map((v, i) => v - names.reduce((s, _, a) => s + beta[a] * X[a][i], 0));
-  const byC = {};
-  rows.forEach((r, i) => { const s = (byC[r.c] ||= new Float64Array(K)); for (let a = 0; a < K; a++) s[a] += X[a][i] * res[i]; });
-  const G = Object.keys(byC).length;
-  const meat = names.map(() => new Float64Array(K));
-  for (const s of Object.values(byC)) for (let a = 0; a < K; a++) for (let b = 0; b < K; b++) meat[a][b] += s[a] * s[b];
-  const V = inv.map((r, a) => r.map((_, b) => G / (G - 1) * inv[a].reduce((s, v, k) => s + v * meat[k].reduce((t, m, l) => t + m * inv[l][b], 0), 0)));
-  const out = { n: rows.length, countries: G };
-  names.forEach((nm, a) => { out[nm] = beta[a]; out[`${nm}Se`] = Math.sqrt(Math.max(0, V[a][a])); });
-  out.aAnnual = -out.gap; out.aSe = out.gapSe; out.kappa = out.x; out.kappaSe = out.xSe; out.gammaE = out.e; out.gammaESe = out.eSe;
-  return out;
-}
 
 
 // Elasticity of EU-27 energy inflation to Brent-in-euro inflation (year-on-year, monthly), used to
@@ -301,18 +253,27 @@ import { GLOBAL } from '../data/geo.js';
 
 export const decRate = rows => Object.fromEntries((rows || []).filter(r => r[0].endsWith('-12')).map(r => [+r[0].slice(0, 4), r[1]]));
 
-// GDP-weighted output gap of the non-EU economies (IMF), the external-demand instrument.
-export function worldGap(imf) {
+// GDP-weighted output gap of the non-EU economies (IMF), the external-demand instrument; weights are
+// GDP in US dollars of `wYear`.
+export function worldGap(imf, wYear = 2019) {
   const nonEU = GLOBAL.filter(g => !EU.some(e => e.iso3 === g.iso3));
   const gaps = outputGaps(imf, nonEU), w = {};
-  for (const g of nonEU) { const v = imf?.[g.iso3]?.gdp?.find(r => +r[0] === 2019)?.[1]; if (v) w[g.iso3] = v; }
+  for (const g of nonEU) { const v = imf?.[g.iso3]?.gdp?.find(r => +r[0] === wYear)?.[1]; if (v) w[g.iso3] = v; }
+  const years = [...new Set(Object.values(gaps).flatMap(g => Object.keys(g).map(Number)))].sort((a, b) => a - b);
   const out = {};
-  for (let y = 1999; y <= 2031; y++) {
+  for (const y of years) {
     let s = 0, ws = 0;
     for (const [iso, wt] of Object.entries(w)) { const v = gaps[iso]?.[y]; if (v != null) { s += wt * v; ws += wt; } }
     if (ws) out[y] = s / ws;
   }
   return out;
+}
+// The same instrument as it could be computed in year y: growth and its projections for the non-EU
+// economies from the IMF vintage of y, weighted by that vintage's GDP of y − 1 (§5.2).
+export function worldGapVintage(vintages, y) {
+  const w = vintages?.[String(y)]?.world; if (!w) return null;
+  const str = rows => rows?.map(([yy, x]) => [String(yy), x]);
+  return worldGap(Object.fromEntries(Object.entries(w).map(([iso, d]) => [iso, { growth: str(d.growth), gdp: str(d.gdp) }])), y - 1);
 }
 
 export function phillipsRows(data, { y0 = 2001, y1 = 2025, gaps, members = EU, world } = {}) {
@@ -404,7 +365,7 @@ export function estimatePhillipsRobust(data, opts = {}) {
 }
 
 // Real-time out-of-sample test (§5.2): for each year y from 2010, the curve is estimated on earlier years
-// with output gaps computed from the IMF vintage published in year y (what was known then), and
+// with the EU output gaps and the rest-of-world instrument computed from the IMF vintage published in year y (what was known then), and
 // December inflation of year y is predicted with that vintage's estimate of the current gap.
 // Energy inflation of year y is either known (conditional forecast) or assumed from flat energy
 // prices (unconditional: energy at its sample mean). Benchmarks receive the same information.
@@ -414,7 +375,7 @@ export function vintageFit(data, vintages, y) {
   const v = vintages?.[String(y)]?.data; if (!v) return null;
   const imfV = Object.fromEntries(Object.entries(v).map(([iso, d]) => [iso, { growth: d.growth?.map(([yy, x]) => [String(yy), x]), unemp: d.unemp?.map(([yy, x]) => [String(yy), x]) }]));
   const gapsV = outputGaps(imfV);
-  const fit = estimatePhillipsRobust({ ...data, imf: { countries: { ...(data.imf?.countries || {}), ...imfV } } }, { y1: y - 1, gaps: gapsV });
+  const fit = estimatePhillipsRobust({ ...data, imf: { countries: { ...(data.imf?.countries || {}), ...imfV } } }, { y1: y - 1, gaps: gapsV, world: worldGapVintage(vintages, y) || undefined });
   return fit ? { fit, gapsV } : null;
 }
 

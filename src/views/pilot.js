@@ -1,4 +1,4 @@
-import { h, icon, num, pct, eur, download, toast } from '../ui/dom.js';
+import { h, icon, num, pct, download, toast } from '../ui/dom.js';
 import { card, lineChart, SERIES, dataTable } from '../ui/charts.js';
 import { simulate } from '../model/engine.js';
 import { referenceCell } from '../model/inputs.js';
@@ -57,7 +57,7 @@ export function pilot(root, app) {
     field('Encouragement cost per household offered, €', 'nudge', 0, 50, 1, 'Cost of the offer and reminders per household offered a wallet, an assumption (Table 18).'),
     h('div', { class: 'ctrl' }, h('span', { class: 'ctrl-l', 'data-tip': 'Seed of the random assignment; recorded in the ledger at pre-registration so the allocation can be reproduced (§10.5).' }, 'Randomisation seed'),
       h('div', { class: 'ctrl-in' },
-        h('input', { type: 'number', class: 'num', style: { width: '130px' }, value: st.seed, onchange: e => { st.seed = Math.abs(parseInt(e.target.value, 10)) || 1; app.rerender(); } }),
+        h('input', { type: 'number', class: 'num', 'aria-label': 'Randomisation seed', style: { width: '130px' }, value: st.seed, onchange: e => { st.seed = Math.abs(parseInt(e.target.value, 10)) || 1; app.rerender(); } }),
         h('button', { class: 'chip', onclick: () => { st.seed = Math.floor(Math.random() * 1e9); app.rerender(); } }, 'New draw'))));
 
   // Import observed trial data.
@@ -81,7 +81,7 @@ export function pilot(root, app) {
       } }, icon('check', 16), 'Apply estimate to the model'));
   };
   showImport();
-  const fileIn = h('input', { type: 'file', accept: '.csv,text/csv', onchange: async e => {
+  const fileIn = h('input', { type: 'file', accept: '.csv,text/csv', 'aria-label': 'Trial data file (CSV)', onchange: async e => {
     const f = e.target.files[0]; if (!f) return;
     try {
       const r = PL.estimate(PL.parseTrialCSV(await f.text()));

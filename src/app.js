@@ -17,6 +17,12 @@ const serial = fn => (ledgerQueue = ledgerQueue.then(fn, fn));
 const append = (chain, entry) => serial(() => appendRaw(chain, entry, keyStore));
 const anchorLog = () => { const ep = (globalThis.PHX_DATA_ENDPOINTS || [])[0]; return ep ? new URL('/anchor', ep).href : null; };
 
+// Last recorded states, kept in memory as well as on the device: where the browser gives no storage
+// (some private modes) a state is still recorded once per session, not at every data refresh.
+const lastStates = new Map();
+const recall = async k => (lastStates.has(k) ? lastStates.get(k) : kvGet(k));
+const remember = async (k, v) => { lastStates.set(k, v); await kvSet(k, v); };
+
 const LS = 'phx:prefs';
 const loadPrefs = () => { try { return JSON.parse(localStorage.getItem(LS)) || {}; } catch { return {}; } };
 const savePrefs = p => { try { localStorage.setItem(LS, JSON.stringify(p)); } catch {} };
@@ -165,16 +171,21 @@ export function createApp() {
   async function signalOnce() {
     if (!app.cells.length) return;
     let pr; try { pr = app.programmes(); } catch { return; }
-    const next = programmeStates(pr), prev = (await kvGet('prog:' + app.region)) || {};
+    // Commodity prices, exchange rates and market volatility are the same in every region: their states
+    // are remembered once, so switching region does not record them again.
+    const all = programmeStates(pr), isShared = k => /^(commodity|currency|volatility)(:|$)/.test(k);
+    const stores = [['prog:shared', Object.fromEntries(Object.entries(all).filter(([k]) => isShared(k)))], ['prog:' + app.region, Object.fromEntries(Object.entries(all).filter(([k]) => !isShared(k)))]];
+    for (const [storeKey, next] of stores) {
+    const prev = (await recall(storeKey)) || {};
     const why = key => {
       const [kind, id] = key.split(':');
       if (kind === 'trigger') return { cell: 'ALL', cause: pr.board.rows.filter(r => r.value != null).map(r => `${r.label} ${r.value.toFixed(2)}% (trigger ${r.threshold}%)`).join('; '), indicators: Object.fromEntries(pr.board.rows.filter(r => r.value != null).map(r => [r.k, +r.value.toFixed(3)])) };
       if (kind === 'volatility') return { cell: 'ALL', cause: `Volatility index ${pr.vol.index.toFixed(2)}× normal (alert ${app.prog.volTh}×)`, indicators: { index: +pr.vol.index.toFixed(3) } };
       if (kind === 'health') return { cell: 'ALL', cause: `Health index ${pr.health.index.toFixed(1)} (alert below ${app.prog.healthTh})`, indicators: { index: +pr.health.index.toFixed(2) } };
       if (kind === 'recall') return { cell: 'ALL', cause: `Inflation ${pr.board.pi?.toFixed(2)}% against the recall trigger ${app.prog.recallTh}%: ${pr.recall.share.toFixed(2)}% of PHX recalled`, indicators: { pi: +(pr.board.pi ?? 0).toFixed(3), share: +pr.recall.share.toFixed(3) } };
-      if (kind === 'commodity') { const it = pr.basket.items.find(x => x.k === id); return { cell: it.label, cause: `${it.label} €${it.price.toFixed(1)} (${it.period}) against the band €${it.lower.toFixed(1)}–${it.upper.toFixed(1)} around its five-year average`, indicators: { price: +it.price.toFixed(2), lower: +it.lower.toFixed(2), upper: +it.upper.toFixed(2) } }; }
+      if (kind === 'commodity') { const it = pr.basket.items.find(x => x.k === id); return { cell: it.label, cause: `${it.label} €${it.price.toFixed(2)} per ${it.each} (${it.period}) against the band €${it.lower.toFixed(2)}–${it.upper.toFixed(2)} around its five-year average`, indicators: { price: +it.price.toFixed(2), lower: +it.lower.toFixed(2), upper: +it.upper.toFixed(2) } }; }
       if (kind === 'housing') { const r = pr.bubble.rows.find(x => x.c.id === id); return { cell: id, cause: `${r.c.name} house prices (${r.quarter}): real growth ${r.real.toFixed(1)}%, gap from trend ${r.gap == null ? 'n/a' : r.gap.toFixed(1) + '%'}, loans to households ${pr.bubble.credit == null ? 'n/a' : pr.bubble.credit.toFixed(1) + '%'}; ${r.n} of 3 signals`, indicators: { real: +r.real.toFixed(2), gap: r.gap == null ? null : +r.gap.toFixed(2), signals: r.n } }; }
-      if (kind === 'currency') { const r = pr.fx.rows.find(x => x.ccy === id); return { cell: id, cause: `${id} ${r.dep >= 0 ? 'down' : 'up'} ${Math.abs(r.dep).toFixed(1)}% against the ${r.against} since ${r.from} (trigger ${app.prog.devalTh}%)`, indicators: { depreciation: +r.dep.toFixed(2) } }; }
+      if (kind === 'currency') { const r = pr.fx.rows.find(x => x.ccy === id); return { cell: id, cause: `${id} ${r.dep >= 0 ? 'down' : 'up'} ${Math.abs(r.dep).toFixed(1)}% against the ${r.against} in the twelve months to ${r.to} (trigger ${app.prog.devalTh}%)`, indicators: { depreciation: +r.dep.toFixed(2) } }; }
       return { cell: 'ALL', cause: key, indicators: {} };
     };
     let changed = false;
@@ -185,7 +196,8 @@ export function createApp() {
       const from = before ?? 'START';
       try { const w = why(key); await append(app.ledger, { kind: 'LIVE', cell: w.cell, type: `${key.split(':')[0].toUpperCase()}_${from}→${st}`, cause: w.cause, indicators: w.indicators }); } catch {}
     }
-    if (changed || Object.keys(prev).length !== Object.keys(next).length) { await kvSet('prog:' + app.region, next); if (changed) { await kvSet('ledger', app.ledger); emit(); } }
+    if (changed || Object.keys(prev).length !== Object.keys(next).length) { await remember(storeKey, next); if (changed) { await kvSet('ledger', app.ledger); emit(); } }
+    }
   }
 
   // One nowcast pass at a time; a request that arrives during a pass runs once it has finished.
@@ -197,7 +209,7 @@ export function createApp() {
   }
   async function nowcastPass() {
     if (!app.cells.length) return;
-    const prev = (await kvGet('live:' + app.region)) || {};
+    const prev = (await recall('live:' + app.region)) || {};
     const next = {};
     let changed = false;
     for (const c of app.cells) {
@@ -213,7 +225,7 @@ export function createApp() {
       }
     }
     app.live = next;
-    if (changed) { await kvSet('live:' + app.region, next); await kvSet('ledger', app.ledger); emit(); }
+    if (changed) { await remember('live:' + app.region, next); await kvSet('ledger', app.ledger); emit(); }
   }
 
   app.logSimulation = async res => {
@@ -239,7 +251,7 @@ export function createApp() {
     await kvSet('ledger', app.ledger);
     if (navigator.onLine) app.anchorLedger().catch(() => {});
   };
-  app.clearLedger = async () => { app.ledger = []; app.ledgerOk = null; await kvSet('ledger', []); await kvSet('live:' + app.region, {}); await kvSet('prog:' + app.region, {}); try { await registerKey(); } catch {} emit(); nowcast().then(signalPass); };
+  app.clearLedger = async () => { app.ledger = []; app.ledgerOk = null; await kvSet('ledger', []); await remember('live:' + app.region, {}); await remember('prog:' + app.region, {}); await remember('prog:shared', {}); try { await registerKey(); } catch {} emit(); nowcast().then(signalPass); };
 
   app.start = async () => {
     app.ledger = (await kvGet('ledger')) || [];

@@ -1,4 +1,4 @@
-// Reproduction of Phoenix Economics Solutions (4 October 2026). One function computes every result of
+// Reproduction of Phoenix Economics Solutions (6 October 2026; data archived on 4 October 2026). One function computes every result of
 // the paper except the forecast backtest, the optimisation frontier, the stress tests and the trial
 // simulations; paper/compute.mjs calls it to write the published results, and the application's
 // Evidence page calls the same function on the same archived data to reproduce them in the browser.

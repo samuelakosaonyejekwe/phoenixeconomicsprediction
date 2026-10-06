@@ -28,6 +28,36 @@ test('money is conserved in every run (§4.13)', () => {
   }
 });
 
+const CELL = { id: 'X', name: 'Test', lat: 50, lon: 10, gdp: 1000, pi: 6, piCore: 4, wE: 0.1, drift: 0, x0: 1, i0: 1, area: 'EA', ea: true, eu: true, gPot: 1.5, anchor: 2, aR: 0.07, driftHalf: 3, pop: 1e7,
+  sectors: { gov: 30, corp: 40, hh: 100 }, flows: { gov: 5, corp: 5, hh: 10 }, inflowDecay: { hh: 24, corp: 8, gov: 6 }, scritHist: { p90: 5, p75: 3 }, measured: { gov: 'quarterly', corp: 'quarterly', hh: 'quarterly' }, energy: { type: 'oil', elasticity: 0.19 } };
+
+test('the run ends exactly at the horizon whatever the time step (§8)', () => {
+  for (const dt of [0.025, 0.02, 0.015, 0.1, 0.25]) {
+    const r = simulate([CELL], { ...DEFAULTS, dt }, SCENARIOS.live, { phx: true });
+    assert.ok(Math.abs(r.rec.t.at(-1) - 24) < 1e-9, `dt ${dt}: last record at ${r.rec.t.at(-1)}`);
+    assert.ok(r.agg.find(a => a.t >= 12 - 1e-9), `dt ${dt}: no record at month 12`);
+    assert.equal(r.totals.lossN, Math.round(24 / dt), `dt ${dt}: loss averaged over ${r.totals.lossN} steps`);
+  }
+});
+
+test('a sector weighted zero is neither counted nor absorbed (§4.2)', () => {
+  const cell = { ...CELL, sectors: { gov: 200, corp: 100, hh: 0 }, flows: { gov: 0, corp: 0, hh: 0 } };
+  const P = { ...DEFAULTS, lamGov: 0, sdCorp: 0, sdGov: 0, r0: 0.01 };
+  const r = simulate([cell], P, SCENARIOS.live, { phx: true });
+  assert.ok(r.totals.absorbed > 0);
+  // Everything absorbed came out of the corporate stock, the only one counted.
+  assert.ok(Math.abs((100 - (r.rec.S.at(-1)[0])) - (r.totals.absorbed - r.totals.matured - r.totals.recallDE - r.totals.recallDeposits)) < 1e-6);
+});
+
+test('optional cross-border diffusion moves deposits without creating or destroying them (§4.1)', () => {
+  const a = { ...CELL, id: 'A', flows: { gov: 0, corp: 0, hh: 0 } }, b = { ...CELL, id: 'B', lat: 48, lon: 2, gdp: 300, sectors: { gov: 0, corp: 0, hh: 5 }, flows: { gov: 0, corp: 0, hh: 0 } };
+  const P = { ...DEFAULTS, d0: 0.1, sdHh: 0, sdCorp: 0, sdGov: 0 };
+  const r = simulate([a, b], P, SCENARIOS.live, { phx: false });
+  const sum = row => row.reduce((x, y) => x + y, 0);
+  assert.ok(Math.abs(sum(r.rec.S.at(-1)) - sum(r.rec.S[0])) < 1e-9, `drift ${sum(r.rec.S.at(-1)) - sum(r.rec.S[0])}`);
+  assert.ok(Math.abs(r.rec.S.at(-1)[1] - r.rec.S[0][1]) > 0.01, 'nothing moved');
+});
+
 // RFC 6962 Merkle tree for the inclusion-proof test.
 const H = (...b) => new Uint8Array(createHash('sha256').update(Buffer.concat(b.map(x => Buffer.from(x)))).digest());
 const leafH = d => H([0], d), nodeH = (l, r) => H([1], l, r);

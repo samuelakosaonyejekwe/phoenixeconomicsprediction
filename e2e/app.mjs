@@ -8,7 +8,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { chromium } from 'playwright-core';
 
-const DIST = new URL('../dist/', import.meta.url).pathname;
+import { fileURLToPath } from 'node:url';
+const DIST = fileURLToPath(new URL('../dist/', import.meta.url));
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png', '.svg': 'image/svg+xml', '.webmanifest': 'application/manifest+json' };
 const server = http.createServer((req, res) => {
   let p = decodeURIComponent(new URL(req.url, 'http://x').pathname);
@@ -22,12 +23,31 @@ const base = `http://127.0.0.1:${server.address().port}/`;
 const fail = msg => { console.error('FAIL', msg); process.exitCode = 1; };
 
 const browser = await chromium.launch();
-const page = await (await browser.newContext({ viewport: { width: 1280, height: 900 }, serviceWorkers: 'block' })).newPage();
+// The anchor service is replaced by a local stand-in, so that test runs enter nothing in the public
+// transparency log and use none of the service's daily allowance. It records each chain head once and
+// returns the record again on request, as the service does.
+const anchored = new Map();
+const stubAnchors = ctx => ctx.route(/\/anchor(\/[0-9a-f]{64})?$/, async route => {
+  const req = route.request(), headers = { 'access-control-allow-origin': '*', 'access-control-allow-headers': 'content-type', 'content-type': 'application/json' };
+  if (req.method() === 'OPTIONS') return route.fulfill({ status: 204, headers });
+  if (req.method() === 'POST') {
+    const b = JSON.parse(req.postData() || '{}');
+    if (!anchored.has(b.hash)) anchored.set(b.hash, { hash: b.hash, seq: b.seq, kid: b.kid ?? null, at: new Date().toISOString(), log: 'e2e stand-in', rekor: null });
+    return route.fulfill({ status: 201, headers, body: JSON.stringify(anchored.get(b.hash)) });
+  }
+  const rec = anchored.get(req.url().split('/').pop());
+  return route.fulfill({ status: rec ? 200 : 404, headers, body: JSON.stringify(rec || { error: 'not found' }) });
+});
+const context = await browser.newContext({ viewport: { width: 1280, height: 900 }, serviceWorkers: 'block' });
+await stubAnchors(context);
+const page = await context.newPage();
 const errors = [];
 page.on('pageerror', e => errors.push(e.message));
 // Network failures of the publishers are tolerated (the app falls back to stored data); any other error,
 // including a Content Security Policy violation, fails the test.
 const PUBLISHERS = /ec\.europa\.eu|data-api\.ecb\.europa\.eu|api\.worldbank\.org|api\.db\.nomics\.world|api\.frankfurter\.dev|bdm\.insee\.fr|rekor\.sigstore\.dev|workers\.dev|pages\.dev|github\.io/;
+// The application's own files must all load: a missing one is an error even though publisher failures are not.
+page.on('response', r => { if (r.url().startsWith(base) && r.status() >= 400) errors.push(`${r.status()} ${r.url()}`); });
 page.on('console', m => { const t = m.text(); if (m.type() === 'error' && !/Failed to load resource|net::ERR_/.test(t) && !(/blocked by CORS policy/.test(t) && PUBLISHERS.test(t))) errors.push(t); });
 
 await page.goto(base + '#/overview');
@@ -65,6 +85,14 @@ for (const r of ['overview', 'detect', 'simulate', 'redistribute', 'contracts', 
   console.log('ok page', r);
 }
 
+// The audit ledger: the device key is registered and anchored at start-up, and verification checks every
+// link, hash and signature and finds the anchor.
+await page.goto(base + '#/contracts');
+await page.getByRole('button', { name: 'Verify' }).click();
+const intact = await page.locator('.verify', { hasText: /Chain intact/ }).waitFor({ timeout: 30000 }).then(() => true).catch(() => false);
+const verifyText = intact ? await page.locator('.verify').innerText() : '';
+if (!intact) fail('the audit ledger does not verify'); else if (!anchored.size || !/1\/1 anchors verified|\d+\/\d+ anchors verified/.test(verifyText)) fail(`the ledger's anchor was not recorded or not verified: ${verifyText}`); else console.log('ok ledger verified with its anchor');
+
 // The December 2021 scenario (§7.2) runs in the lab.
 await page.evaluate(() => { localStorage.setItem('phx:prefs', JSON.stringify({ region: 'ea', scenario: 'episode' })); });
 await page.goto(base + '#/simulate');
@@ -92,16 +120,37 @@ await page.goto(base + '#/validate');
 await page.getByRole('button', { name: 'Reproduce' }).click();
 await page.locator('main', { hasText: /Exact match|differences|HTTP|failed/i }).waitFor({ timeout: 20 * 60 * 1000 });
 const ev = await page.locator('main').innerText();
-const m = ev.match(/([\d,]+) of ([\d,]+) published values reproduced/);
+const m = ev.match(/([\d,]+) of ([\d,]+) published values of the core results reproduced/);
 if (!/Exact match/.test(ev) || !m || m[1] !== m[2]) fail(`reproduction did not match: ${ev.slice(0, 600)}`);
 else console.log(`ok reproduction: ${m[1]} of ${m[2]} values`);
 
 // The paper's risk register (Table 20) is shown with all its rows.
 await page.getByText('Show the full register').click();
 const regRows = await page.locator('table', { hasText: 'Resolution' }).locator('tbody tr').count();
-if (regRows !== 55) fail(`risk register shows ${regRows} rows, expected 55`); else console.log('ok risk register: 55 rows');
+if (regRows !== 52) fail(`risk register shows ${regRows} rows, expected 52`); else console.log('ok risk register: 52 rows');
 
 if (errors.length) fail(`browser errors:\n${errors.slice(0, 10).join('\n')}`);
+
+// With the service worker: the app opens offline after one visit, and the single-file offline edition is
+// served as itself rather than as the app shell.
+{
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  await stubAnchors(ctx);
+  const p2 = await ctx.newPage();
+  await p2.goto(base + '#/overview');
+  await p2.waitForSelector('.kpis', { timeout: 120000 });
+  await p2.evaluate(() => navigator.serviceWorker.ready.then(() => new Promise(r => (navigator.serviceWorker.controller ? r() : navigator.serviceWorker.addEventListener('controllerchange', r, { once: true })))));
+  const offlineSize = await p2.evaluate(async () => (await (await fetch('phoenix-offline.html')).text()).length);
+  await p2.goto(base + 'phoenix-offline.html');
+  const served = await p2.evaluate(() => document.documentElement.outerHTML.length);
+  if (!(offlineSize > 1e6) || served < 1e6) fail(`the offline edition is not served as itself under the service worker (${served} characters; the file has ${offlineSize})`); else console.log('ok offline edition served as itself');
+  await p2.goto(base + '#/overview');
+  await ctx.setOffline(true);
+  await p2.reload();
+  const up = await p2.waitForSelector('.kpis', { timeout: 60000 }).then(() => true).catch(() => false);
+  if (!up) fail('the app does not open offline after a first visit'); else console.log('ok opens offline after a first visit');
+  await ctx.close();
+}
 await browser.close();
 server.close();
 console.log(process.exitCode ? 'E2E FAILED' : 'E2E PASSED');

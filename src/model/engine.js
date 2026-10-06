@@ -16,13 +16,16 @@
 // Money is conserved: absorbed funds plus premiums equal credits + wallets + wallet spending +
 // matured credits returned + recalls (Digital Euro, bank deposits, Dragon reserve) at every step (§4.13).
 import { distanceKm } from '../data/geo.js';
-import { SECTORS, surplusOf, coverageOf, scritPctOf, scritPathOf } from './inputs.js';
+import { SECTORS, coverageOf, scritPctOf, scritPathOf } from './inputs.js';
 import { energyPath } from './estimation.js';
 
 const sigm = x => 1 / (1 + Math.exp(-x));
 const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
 const smooth = s => { const u = clamp(s, 0, 1); return u * u * (3 - 2 * u); };
 const K = SECTORS.length;
+
+// Width, in km, of the Gaussian that weights neighbouring economies on the network (§4.1).
+const NEIGHBOUR_KM = 600;
 
 export const FIELDS = ['S', 'pi', 'x', 'i', 'Phi', 'Theta', 'C', 'L', 'D', 'O', 'F', 'H'];
 
@@ -41,7 +44,7 @@ export function prepare(cells, P, scenario = {}) {
   const S0 = cells.map(c => SECTORS.map(s => (c.sectors[s.k] || 0) * (shock.sMul || 1)));
   const I0 = cells.map(c => SECTORS.map(s => (c.flows?.[s.k] || 0) / 12 * (shock.iMul || 1)));
   const D = cells.map(a => cells.map(b => distanceKm(a, b)));
-  const sg = 600;
+  const sg = NEIGHBOUR_KM;
   const Wraw = D.map(r => r.map(d => (d === 0 ? 0 : Math.exp(-(d * d) / (2 * sg * sg)))));
   const maxRow = Math.max(1e-9, ...Wraw.map(r => r.reduce((s, x) => s + x, 0)));
   const W = Wraw.map(r => r.map(x => x / maxRow));
@@ -76,10 +79,12 @@ function makeCtx(cells, P, scenario, opts) {
   const sdK = [P.sdGov ?? 0, P.sdCorp ?? 0.15, P.sdHh ?? 0.1];
   const lam = SECTORS.map(s => P[s.lam] ?? 1);
   const u = 1 - Math.exp(-(P.rP ?? 1) / Math.max(0.01, P.r0 ?? 2));
-  const take = [1, u, u]; // statutory for governments, voluntary for firms and households
+  // Statutory for governments, voluntary for firms and households; a sector weighted below 1 is absorbed
+  // in the same proportion, so a weight of 0 leaves it untouched (§4.2).
+  const take = [1, u, u].map((v, k) => v * Math.min(1, lam[k]));
   const X = {
     N, A, cells, mask: mask ? 1 : 0, act, kScale: opts.kScale || 1, extra: opts.perturb || null, phx: phxAll ? 1 : 0,
-    dt: P.dt, steps: Math.round(P.months / P.dt), perRecord: Math.max(1, Math.round(0.25 / P.dt)),
+    dt: P.dt, steps: Math.round(P.months / P.dt),
     kA: P.kA, capPct: P.capPct, fbGain: P.fbGain ?? 0, piTh: P.piTh, heav: P.trigMode === 'heaviside' ? 1 : 0, hyst: P.hyst, epsPi: P.epsPi,
     alphaT: P.alphaT, nu: P.nu, guard: P.guard ? 1 : 0, target: P.target, floorPct: P.floorPct, d0: P.d0 ?? 0, scritPct: P.scritPct,
     sigma0: P.sigma0, alphaV: P.alphaV, tau: P.tau, theta2: P.theta2, mat: 1 / Math.max(1, P.matMonths ?? 36), rP: (P.rP ?? 1) / 1200,
@@ -251,7 +256,7 @@ function stepTransfers(X) {
       if (!wt[j]) continue;
       const m = out * wt[j] / wsum;
       dL[i] -= m; dL[j] += m;
-      flows[i][j] += m * dt; X.tot.transfers += m * dt;
+      if (!X.final) { flows[i][j] += m * dt; X.tot.transfers += m * dt; }
     }
   }
 }
@@ -282,7 +287,7 @@ function stepCells(X, t, k, log) {
     // Recall destination (§4.7): Dragon reserve in a crisis; else the Digital Euro up to the
     // holding limit, the remainder swept to linked bank accounts. Both return to holders' stock.
     let toDE = 0, toDep = 0;
-    if (recall > 0) {
+    if (recall > 0 && !X.final) {
       if (X.dragon[i]) tot.recallDragon += recall * dt;
       else {
         toDE = Math.min(recall, Math.max(0, (X.deCap[i] - X.DE[i]) / dt));
@@ -314,8 +319,10 @@ function stepCells(X, t, k, log) {
     X.Dis[i] = (pi[i] - X.target) ** 2 + X.lossX * x[i] * x[i];
     X.Ov[i] = Math.max(0, rho[i] - 1) ** 2;
 
-    tot.absorbed += Phi[i] * dt; X.cumAbs[i] += Phi[i] * dt;
-    tot.premium += prem * dt; tot.released += rel * dt; tot.matured += mat * dt; tot.spent += cons * dt;
+    if (!X.final) {
+      tot.absorbed += Phi[i] * dt; X.cumAbs[i] += Phi[i] * dt;
+      tot.premium += prem * dt; tot.released += rel * dt; tot.matured += mat * dt; tot.spent += cons * dt;
+    }
     log(i, recall);
   }
 }
@@ -323,6 +330,7 @@ function stepCells(X, t, k, log) {
 function stepUpdate(X) {
   const { N, dt } = X;
   let lossNum = 0, w = 0;
+  if (X.d0) { X.hh0 = X.S.map(r => r[2]); X.Y0 = Float64Array.from(X.Y); }
   for (let i = 0; i < N; i++) {
     const Si = X.S[i], Ui = X.U[i], Ii = X.I0[i];
     // Returned funds go back to the sectors in proportion to what each placed (§4.2), and leave U:
@@ -338,9 +346,10 @@ function stepUpdate(X) {
       Ui[k] = Math.max(0, Ui[k] + dt * (X.PhiK[i][k] - back - (X.sdK[k] / 12) * Ui[k]));
     }
     if (X.d0) {
-      // optional size-proportional diffusion of the household stock between neighbours
+      // optional size-proportional diffusion of the household stock between neighbours, from the stocks
+      // and GDP at the start of the step so that what one economy loses another gains
       let lap = 0;
-      for (let j = 0; j < N; j++) if (X.W[i][j]) lap += X.W[i][j] * (X.S[j][2] / X.Y[j] - Si[2] / X.Y[i]) * Math.min(X.Y[i], X.Y[j]);
+      for (let j = 0; j < N; j++) if (X.W[i][j]) lap += X.W[i][j] * (X.hh0[j] / X.Y0[j] - X.hh0[i] / X.Y0[i]) * Math.min(X.Y0[i], X.Y0[j]);
       Si[2] = Math.max(0, Si[2] + dt * X.d0 * lap);
     }
     X.C[i] = Math.max(0, X.C[i] + dt * X.dC[i]);
@@ -377,6 +386,8 @@ export function simulate(cells, P, scenario = {}, opts = {}) {
   const st = { activeTh: new Uint8Array(N), recall: new Uint8Array(N), dragon: new Uint8Array(N), below: Uint8Array.from(X.rho, r => (r <= 1 ? 1 : 0)), onTarget: Uint8Array.from(pi, p => (p <= P.target + 0.2 ? 1 : 0)) };
   const arr = a => Array.from(a);
   let t = 0, k = 0;
+  // Records every quarter of a month, at the step nearest to it, and at the last step whatever the time step.
+  let nextRec = 0, recN = 0;
   const ev = (i, type, cause, extraInfo) => events.push({
     t: +t.toFixed(2), cell: cells[i].id, name: cells[i].name, type, cause,
     indicators: { pi: +pi[i].toFixed(2), x: +x[i].toFixed(2), i: +X.iA[X.area[i]].toFixed(2), S: +X.Stot[i].toFixed(2), Scrit: +X.Scrit[i].toFixed(2), Theta: +Th[i].toFixed(3) },
@@ -394,8 +405,10 @@ export function simulate(cells, P, scenario = {}, opts = {}) {
     if (onT !== st.onTarget[i] && k) { ev(i, onT ? 'ON_TARGET' : 'OFF_TARGET', `π ${pi[i].toFixed(2)}% vs target ${P.target}%`); st.onTarget[i] = onT; }
   };
 
+  // The state at the horizon is recorded at the last pass, which integrates nothing: totals and the loss
+  // cover exactly `months`.
   for (k = 0; k <= X.steps; k++) {
-    t = k * dt; X.t = t;
+    t = k * dt; X.t = t; X.final = k === X.steps;
     stepStocks(X);
     X.dC.fill(0); X.dL.fill(0);
     areaMeans(X, k);
@@ -405,14 +418,15 @@ export function simulate(cells, P, scenario = {}, opts = {}) {
     stepNeed(X);
     stepTransfers(X);
     stepCells(X, t, k, log);
-    if (k % X.perRecord === 0) {
+    if (k === nextRec || k === X.steps) {
+      if (k === nextRec) { recN++; nextRec = Math.round(recN * 0.25 / dt); }
       rec.t.push(+t.toFixed(4));
       rec.S.push(arr(X.Stot)); rec.pi.push(arr(pi)); rec.x.push(arr(x)); rec.i.push(Array.from(X.area, a => X.iA[a]));
       rec.Phi.push(arr(X.Phi)); rec.Theta.push(arr(Th)); rec.C.push(arr(C)); rec.L.push(arr(L));
       rec.D.push(arr(X.Dis)); rec.O.push(arr(X.Ov)); rec.F.push(arr(F)); rec.H.push(arr(X.H)); rec.mode.push(Array.from(X.dragon, d => (d ? 'dragon' : 'euro')));
       rec.Scrit = rec.Scrit || []; rec.Scrit.push(arr(X.Scrit)); rec.Y = rec.Y || []; rec.Y.push(arr(X.Y));
     }
-    stepUpdate(X);
+    if (!X.final) stepUpdate(X);
   }
 
   const tot = X.tot;
@@ -439,7 +453,6 @@ export function simulate(cells, P, scenario = {}, opts = {}) {
   };
 }
 
-// Routing kernel for display (§4.6).
 // Need index of §4.6 for display: below-target inflation, negative output gap, unemployment above
 // its natural rate and a fiscal deficit, each on a fixed scale (the same formula as stepNeed).
 export const needIndex = (c, pi, x, P) => 0.05 + (clamp(P.target - pi, 0, 2) + clamp(-x / 2, 0, 2) + clamp((c.unemp ?? 0) - (c.uBar ?? c.unemp ?? 0), 0, 2) + clamp(-(c.govPct ?? 0) / 3, 0, 2)) / 4;
@@ -450,7 +463,7 @@ export function kernelMatrix(cells, pi, P, x = cells.map(c => c.x0 ?? 0)) {
   const need = cells.map((c, j) => needIndex(c, pi[j], x[j], P));
   return cells.map((a, i) => {
     let gpi = 0, ws = 0;
-    for (let j = 0; j < N; j++) { const d = distanceKm(a, cells[j]); const w = d ? Math.exp(-(d * d) / (2 * 600 * 600)) : 0; gpi += w * Math.abs(pi[j] - pi[i]); ws += w; }
+    for (let j = 0; j < N; j++) { const d = distanceKm(a, cells[j]); const w = d ? Math.exp(-(d * d) / (2 * NEIGHBOUR_KM * NEIGHBOUR_KM)) : 0; gpi += w * Math.abs(pi[j] - pi[i]); ws += w; }
     const sigma = P.sigma0 + P.alphaV * (ws ? gpi / ws : 0);
     const chi = clamp((pi[i] - P.target) / span, 0, 1);
     return cells.map((b, j) => {
@@ -541,5 +554,5 @@ export function optimisePolicy(cells, P, scenario, opts = {}, { starts = 3, iter
   }
   const Qb = toQ(best.x);
   const atBound = keys.filter((k, j) => Math.abs(Qb[k] - lo[j]) < 1e-3 * (hi[j] - lo[j]) || Math.abs(Qb[k] - hi[j]) < 1e-3 * (hi[j] - lo[j]));
-  return { best: Object.fromEntries(keys.map(k => [k, Qb[k]])), loss: best.v, lossNoPhoenix: off, lossDefault: f(def), atBound, evaluations: cache.size, starts: startBest.length, startSpread: Math.max(...startBest) - Math.min(...startBest) };
+  return { best: Object.fromEntries(keys.map(k => [k, Qb[k]])), loss: best.v, lossNoPhoenix: off, lossDefault: (r => r.totals.lossAvg + (P.lossC ?? 1) * r.totals.costPctGDP)(simulate(cells, P, scenario, { ...opts, prep, phx: true })), atBound, evaluations: cache.size, starts: startBest.length, startSpread: Math.max(...startBest) - Math.min(...startBest) };
 }

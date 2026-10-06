@@ -8,13 +8,13 @@ export const PARAM_GROUPS = [
     params: [
       { k: 'scritMode', label: 'Critical stock S_crit', def: 'hist90', cal: 'D', options: [['hist90', '90th percentile of pre-2020 history'], ['hist75', '75th percentile of pre-2020 history'], ['fixed', 'Fixed share of GDP (below)']], help: 'Excess deposits larger than this share of pre-2020 episodes of the same length are exceptional (§3.3).' },
       { k: 'scritPct', label: 'Fixed S_crit, % of GDP (when chosen above)', def: 10, min: 0.5, max: 30, step: 0.5, cal: 'P', help: 'Used only when the critical stock is set to a fixed share of GDP: excess deposits above this share count as exceptional (§3.3, §7.5).' },
-      { k: 'floorPct', label: 'Absorption floor, × S_crit', def: 0.6, min: 0, max: 1.2, step: 0.05, cal: 'P', help: 'Absorption stops once the excess stock falls to this multiple of S_crit, so Phoenix never drains deposits below an exceptional level (§4.4).' },
+      { k: 'floorPct', label: 'Absorption floor, × S_crit', def: 0.6, min: 0, max: 1.2, step: 0.05, cal: 'P', help: 'Absorption stops once the excess stock falls to this multiple of S_crit, so Phoenix never drains deposits below that level (§4.4).' },
       { k: 'accStart', label: 'Accumulation starts', def: '2020-Q1', cal: 'P', options: [['2020-Q1', '2020 Q1'], ['2021-Q1', '2021 Q1'], ['2022-Q1', '2022 Q1']], help: 'Quarter from which deposits above the 2016–2019 pace are accumulated into the excess stock. Later starts exclude the pandemic build-up (§3.2, §7.5).' },
       { k: 'lamGov', label: 'λ government', def: 1, min: 0, max: 2, step: 0.05, cal: 'P', help: 'Weight of government excess deposits in the stock that triggers and is absorbed; 1 counts them fully, 0 ignores them (§4.2).' },
       { k: 'lamCorp', label: 'λ corporate', def: 1, min: 0, max: 2, step: 0.05, cal: 'P', help: 'Weight of corporate excess deposits in the stock that triggers and is absorbed; 1 counts them fully, 0 ignores them (§4.2).' },
       { k: 'lamHh', label: 'λ household', def: 1, min: 0, max: 2, step: 0.05, cal: 'P', help: 'Weight of household excess deposits in the stock that triggers and is absorbed; 1 counts them fully, 0 ignores them (§4.2).' },
       { k: 'sdHh', label: 's_hh spending out of household excess, per year', def: 0.1, min: 0.02, max: 0.4, step: 0.01, cal: 'L', help: 'Upper end of wealth effects on consumption (about 0.02 at once, 0.09 in the long run for housing wealth; Carroll, Otsuka & Slacalek 2011); drawn 0.04–0.2 in the stress tests (§5.4, §7.7).' },
-      { k: 'sdCorp', label: 's_corp spending out of corporate excess, per year', def: 0.15, min: 0, max: 0.4, step: 0.01, cal: 'M', help: 'Uncertain: investment–cash-flow sensitivities of 0.05–0.3 (Fazzari, Hubbard & Petersen 1988) are disputed (Kaplan & Zingales 1997); measured by the firm arm of the trial (§5.4, §10).' },
+      { k: 'sdCorp', label: 's_corp spending out of corporate excess, per year', def: 0.15, min: 0, max: 0.4, step: 0.01, cal: 'M', help: 'Uncertain, and an assumption: investment–cash-flow sensitivities of about 0.2–0.5 (Fazzari, Hubbard & Petersen 1988) are disputed as a measure of financing constraints (Kaplan & Zingales 1997); drawn 0.05–0.3 in the stress tests and measured by the firm arm of the trial (§5.4, §10).' },
       { k: 'sdGov', label: 's_gov spending out of government excess, per year', def: 0, min: 0, max: 0.3, step: 0.01, cal: 'P', help: 'Zero by default: under the fiscal rules an unabsorbed surplus reduces debt; 0.1 and 0.2 are reported as sensitivities (§5.4, §7.4).' },
       { k: 'phiSel', label: 'φ_sel spending share of absorbed funds', def: 1, min: 0, max: 1, step: 0.05, cal: 'M', help: 'How much of the spending propensity applies to the funds that holders actually move into PHX. 1 is the upper bound; the randomised trial measures it (§4.8, §10).' },
       { k: 'd0', label: 'd₀ cross-border diffusion, per month', def: 0, min: 0, max: 0.1, step: 0.005, cal: 'P', ext: true, help: 'Monthly rate at which excess stocks diffuse between neighbouring economies on the network. Zero by default: deposits stay where they are held (§4.1–4.2).' },
@@ -98,7 +98,7 @@ export const PARAM_GROUPS = [
     id: 'run', title: 'Run', pde: [],
     params: [
       { k: 'months', label: 'Horizon, months', def: 24, min: 3, max: 120, step: 1, cal: 'N', help: 'Length of the simulation, in months.' },
-      { k: 'dt', label: 'Time step, months', def: 0.025, min: 0.005, max: 0.25, step: 0.005, cal: 'N', help: 'First-order explicit scheme; halving the step changes the reported effects by well under 1% (§8).' },
+      { k: 'dt', label: 'Time step, months', def: 0.025, min: 0.005, max: 0.25, step: 0.005, cal: 'N', help: 'First-order explicit scheme; halving the default step changes the reported effects by less than 1% (§8).' },
       { k: 'phx', label: 'Phoenix enabled', def: true, bool: true, help: 'Switch Phoenix off to see the no-Phoenix counterfactual on its own.' },
       { k: 'nowcast', label: 'Start from today’s daily inflation nowcast', def: true, bool: true, help: 'Daily oil prices in euro and the euro exchange rate, with coefficients estimated on EU data (§3.7).' },
     ],
@@ -112,7 +112,7 @@ export const SCENARIOS = {
   live: { label: 'Live data (current conditions)', desc: 'Initial state built from the latest official releases.', patch: {} },
   reference: { label: 'EU-27 aggregate today', desc: '§7.1: the EU-27 aggregated into one economy on today’s data.', patch: {}, referenceCase: 'today' },
   episode: { label: 'EU-27 as of 31 December 2021', desc: '§7.2: the EU-27 aggregate on the data published by 31 December 2021 (inflation to November 2021, accounts to 2021 Q2, IMF October 2021, forward curve of 31 December 2021).', patch: {}, referenceCase: 'past', asOf: '2021-11' },
-  energy: { label: 'Energy price shock', desc: 'Inflation jumps 2.5 pp and keeps drifting up 0.15 pp a month, fading with the trend half-life.', patch: {}, shock: { dPi: 2.5, drift: 0.15 } },
+  energy: { label: 'Energy price shock', desc: 'Inflation jumps 2.5 pp, with an added upward drift of 0.15 pp a month that fades with the trend half-life.', patch: {}, shock: { dPi: 2.5, drift: 0.15 } },
   surge: { label: 'Surplus surge', desc: 'Windfall revenues and retained profits lift the excess stock 60% and treble new inflows.', patch: {}, shock: { sMul: 1.6, iMul: 3 } },
   slump: { label: 'Demand slump', desc: 'Inflation falls 1.5 pp and the output gap opens 2 pp; contracts should stay dormant and release liquidity.', patch: {}, shock: { dPi: -1.5, drift: -0.08, dx: -2 } },
 };

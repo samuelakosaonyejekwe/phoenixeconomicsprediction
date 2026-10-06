@@ -37,6 +37,8 @@ export const clear = el => { while (el.firstChild) el.firstChild.remove(); retur
 const nf = new Map();
 export function num(v, d = 1) {
   if (v === null || v === undefined || Number.isNaN(v)) return '–';
+  // A value that rounds to zero is shown as 0, not as −0.
+  if (Math.abs(v) < 0.5 * 10 ** -d) v = 0;
   const key = d;
   if (!nf.has(key)) nf.set(key, new Intl.NumberFormat(undefined, { minimumFractionDigits: d, maximumFractionDigits: d }));
   return nf.get(key).format(v);
@@ -44,9 +46,11 @@ export function num(v, d = 1) {
 export function eur(bn, d = 1) {
   if (bn === null || bn === undefined || Number.isNaN(bn)) return '–';
   const a = Math.abs(bn);
-  if (a >= 1000) return `€${num(bn / 1000, d)}tn`;
-  if (a >= 1) return `€${num(bn, d)}bn`;
-  return `€${num(bn * 1000, 0)}m`;
+  // A trillion-scale amount keeps at least two decimals: €2.26tn, not €2tn.
+  if (a >= 1000) return `${bn < 0 ? '−' : ''}€${num(a / 1000, Math.max(d, 2))}tn`;
+  if (a >= 1) return `${bn < 0 ? '−' : ''}€${num(a, d)}bn`;
+  if (a === 0) return '€0';
+  return `${bn < 0 ? '−' : ''}€${num(a * 1000, 0)}m`;
 }
 export const pct = (v, d = 1) => (v === null || v === undefined ? '–' : `${num(v, d)}%`);
 export const ago = iso => {
@@ -150,7 +154,3 @@ export function download(name, text, type = 'application/json') {
   setTimeout(() => URL.revokeObjectURL(url), 2000);
 }
 
-export function debounce(fn, ms) {
-  let t;
-  return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); };
-}

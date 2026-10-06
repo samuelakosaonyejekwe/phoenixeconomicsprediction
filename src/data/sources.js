@@ -75,7 +75,8 @@ function parseCSV(text) {
 }
 
 async function ecbSeries(key, n, timeout = 20000, startPeriod = null) {
-  const text = await getJSON(`${ECB}${key}?${startPeriod ? `startPeriod=${startPeriod}` : `lastNObservations=${n}`}&format=csvdata`, { text: true, timeout });
+  // detail=dataonly leaves out the descriptive columns, a quarter of the size for long daily series.
+  const text = await getJSON(`${ECB}${key}?${startPeriod ? `startPeriod=${startPeriod}` : `lastNObservations=${n}`}&format=csvdata&detail=dataonly`, { text: true, timeout });
   const rows = parseCSV(text);
   const h = rows[0], ti = h.indexOf('TIME_PERIOD'), vi = h.indexOf('OBS_VALUE');
   return rows.slice(1).map(r => [r[ti], num(r[vi])]).filter(r => r[1] !== null);
@@ -101,15 +102,16 @@ const yearsAgoQ = n => `${new Date().getUTCFullYear() - n}-Q1`;
 
 const eurostat = (ds, params) => getJSON(`${EUROSTAT}${ds}?${params}`).then(parseJsonStat);
 
-// International commodity prices (INSEE, monthly, US dollars) for the commodity basket.
+// International commodity prices (INSEE, monthly) for the commodity basket. `per` is the number of quoted
+// units in one US dollar (100 for prices quoted in cents); `each` is the physical unit.
 const INSEE = 'https://bdm.insee.fr/series/sdmx/data/SERIES_BDM/';
 const INSEE_EURUSD = '010002053'; // euros per US dollar
 export const COMMODITIES = [
-  { k: 'brent', id: '010002077', label: 'Brent crude oil', unit: 'US$ per barrel', group: 'Energy' },
-  { k: 'gold', id: '010002061', label: 'Gold', unit: 'US$ per ounce', group: 'Precious metals' },
-  { k: 'wheat', id: '010002046', label: 'Wheat', unit: 'US¢ per bushel', group: 'Agriculture' },
-  { k: 'maize', id: '010002058', label: 'Maize', unit: 'US¢ per bushel', group: 'Agriculture' },
-  { k: 'copper', id: '010002052', label: 'Copper', unit: 'US$ per tonne', group: 'Industrial metals' },
+  { k: 'brent', id: '010002077', label: 'Brent crude oil', unit: 'US$ per barrel', each: 'barrel', group: 'Energy' },
+  { k: 'gold', id: '010002061', label: 'Gold', unit: 'US$ per ounce', each: 'ounce', group: 'Precious metals' },
+  { k: 'wheat', id: '010002046', label: 'Wheat', unit: 'US¢ per bushel', per: 100, each: 'bushel', group: 'Agriculture' },
+  { k: 'maize', id: '010002058', label: 'Maize', unit: 'US¢ per bushel', per: 100, each: 'bushel', group: 'Agriculture' },
+  { k: 'copper', id: '010002052', label: 'Copper', unit: 'US$ per tonne', each: 'tonne', group: 'Industrial metals' },
 ];
 // SDMX-ML (structure-specific) -> { idbank: [[period, value], ...] } sorted by period.
 export function parseInsee(xml) {
@@ -199,14 +201,15 @@ export const CONNECTORS = [
     },
   },
   {
-    id: 'markets', label: 'Daily markets: €STR, 10-year AAA yield, EUR/USD (120 days)', provider: 'European Central Bank', cadence: 'Daily (business days)',
+    id: 'markets', label: 'Daily markets: €STR, 10-year AAA yield, EUR/USD (one year)', provider: 'European Central Bank; EUR/USD reference rates via Frankfurter', cadence: 'Daily (business days)',
     home: 'https://data.ecb.europa.eu/',
     run: async () => {
-      const since = new Date(Date.now() - 130 * 864e5).toISOString().slice(0, 10);
+      // A year of trading days: the volatility index compares the last 20 with the months before them.
+      const since = new Date(Date.now() - 370 * 864e5).toISOString().slice(0, 10);
       const [estr, y10, fx] = await Promise.all([
-        ecbSeries('EST/B.EU000A2X2A25.WT', 90),
-        ecbSeries('YC/B.U2.EUR.4F.G_N_A.SV_C_YM.SR_10Y', 90),
-        getJSON(`https://api.frankfurter.dev/v1/${since}..?symbols=USD`, { retries: 1 }).then(d => Object.entries(d.rates).map(([day, r]) => [day, r.USD])).catch(() => ecbSeries('EXR/D.USD.EUR.SP00.A', 90)),
+        ecbSeries('EST/B.EU000A2X2A25.WT', 260, 40000),
+        ecbSeries('YC/B.U2.EUR.4F.G_N_A.SV_C_YM.SR_10Y', 260, 40000),
+        getJSON(`https://api.frankfurter.dev/v1/${since}..?symbols=USD`, { retries: 1 }).then(d => Object.entries(d.rates).map(([day, r]) => [day, r.USD])).catch(() => ecbSeries('EXR/D.USD.EUR.SP00.A', 260, 40000)),
       ]);
       return { estr, y10, eurusd: fx };
     },
@@ -236,7 +239,7 @@ export const CONNECTORS = [
   },
   {
     id: 'weo', label: 'IMF World Economic Outlook, latest release on DBnomics (backup only: the model uses the current IMF DataMapper vintage)', provider: 'IMF via DBnomics', cadence: 'As republished by DBnomics',
-    home: 'https://db.nomics.world/IMF/WEO',
+    home: 'https://db.nomics.world/IMF',
     run: async () => {
       const countries = [...new Set([...GLOBAL.map(c => c.iso3), ...EU.map(c => c.iso3)])];
       const dims = encodeURIComponent(JSON.stringify({ 'weo-subject': ['PCPIPCH', 'GGXCNL_NGDP', 'BCA_NGDPD', 'NGDPD', 'LUR', 'NGDP_RPCH'], 'weo-country': countries }));
@@ -294,21 +297,31 @@ export const CONNECTORS = [
     id: 'expect', label: 'Inflation expectations (ECB SPF, long term), euro-area forward rates, monthly EUR/USD', provider: 'European Central Bank', cadence: 'Daily / monthly / quarterly',
     home: 'https://data.ecb.europa.eu/',
     run: async () => {
-      const [spf, fwd, eurusdM] = await Promise.all([
+      // One request per curve (the six maturities joined in the key) instead of one per maturity: the
+      // connector no longer fails because a single small request timed out.
+      const months = { IF_3M: 3, IF_6M: 6, IF_9M: 9, IF_1Y: 12, IF_2Y: 24, IF_3Y: 36 };
+      const curveKey = `YC/B.U2.EUR.4F.G_N_A.SV_C_YM.${Object.keys(months).join('+')}`;
+      const curve = async query => {
+        const rows = parseCSV(await getJSON(`${ECB}${curveKey}?${query}&format=csvdata&detail=dataonly`, { text: true, timeout: 60000 }));
+        const h = rows[0], di = h.indexOf('DATA_TYPE_FM'), ti = h.indexOf('TIME_PERIOD'), vi = h.indexOf('OBS_VALUE');
+        const lastBy = {};
+        for (const r of rows.slice(1)) { const v = num(r[vi]); if (v !== null && months[r[di]] && (!lastBy[r[di]] || r[ti] > lastBy[r[di]][0])) lastBy[r[di]] = [r[ti], v]; }
+        const pts = Object.entries(lastBy).map(([m, [day, v]]) => [months[m], v, day]).sort((a, b) => a[0] - b[0]);
+        return { date: pts.map(p => p[2]).sort().pop(), curve: pts.map(p => [p[0], p[1]]) };
+      };
+      const [spf, forwards, eurusdM, forwardsEpisode] = await Promise.all([
         ecbSeries('SPF/Q.U2.HICP.POINT.LT.Q.AVG', 40, 60000),
-        Promise.all(['3M', '6M', '9M', '1Y', '2Y', '3Y'].map(m => ecbSeries(`YC/B.U2.EUR.4F.G_N_A.SV_C_YM.IF_${m}`, 1).then(r => [m, r.at(-1)]))),
+        curve('lastNObservations=1'),
         ecbSeries('EXR/M.USD.EUR.SP00.A', 340, 90000),
+        // Forward curve at the start of the December 2021 reference episode (§7.2).
+        curve('startPeriod=2021-12-24&endPeriod=2021-12-31'),
       ]);
-      const months = { '3M': 3, '6M': 6, '9M': 9, '1Y': 12, '2Y': 24, '3Y': 36 };
-      // Forward curve at the start of the December 2021 reference episode (§7.2).
-      const ep = await Promise.all(Object.keys(months).map(m => getJSON(`${ECB}YC/B.U2.EUR.4F.G_N_A.SV_C_YM.IF_${m}?startPeriod=2021-12-24&endPeriod=2021-12-31&format=csvdata`, { text: true, timeout: 60000 })
-        .then(t => { const r = parseCSV(t), h = r[0], vi = h.indexOf('OBS_VALUE'), ti = h.indexOf('TIME_PERIOD'); const lastRow = r.slice(1).filter(x => x[vi]).at(-1); return lastRow ? [months[m], num(lastRow[vi]), lastRow[ti]] : null; }).catch(() => null)));
-      return { spf, forwards: { date: fwd[0][1]?.[0], curve: fwd.filter(([, r]) => r).map(([m, r]) => [months[m], r[1]]) }, forwardsEpisode: { date: ep.find(Boolean)?.[2], curve: ep.filter(Boolean).map(r => [r[0], r[1]]) }, eurusdM };
+      return { spf, forwards, forwardsEpisode, eurusdM };
     },
   },
   {
     id: 'commod', label: 'International commodity prices: Brent, gold, wheat, maize, copper (monthly, US$) and the euro–dollar rate', provider: 'INSEE (international prices of imported raw materials)', cadence: 'Monthly',
-    home: 'https://www.insee.fr/en/statistiques/series/102930085',
+    home: 'https://www.insee.fr/en/statistiques/serie/010002077',
     run: async () => {
       const ids = [...COMMODITIES.map(c => c.id), INSEE_EURUSD].join('+');
       const by = parseInsee(await getJSON(`${INSEE}${ids}?startPeriod=2005-01`, { text: true, timeout: 40000 }));
@@ -360,29 +373,23 @@ export const CONNECTORS = [
     },
   },
   {
-    id: 'banks', label: 'Bank soundness by country: non-performing loans ratio (significant institutions) and CET1 capital ratio', provider: 'European Central Bank', cadence: 'Quarterly',
+    id: 'banks', label: 'Bank soundness by country: non-performing loans ratio of significant institutions', provider: 'European Central Bank', cadence: 'Quarterly',
     home: 'https://data.ecb.europa.eu/data/datasets/SUP',
     run: async () => {
-      const [npl, cet1] = await Promise.all([
-        ecbByArea('SUP/Q..W0._Z.I7000._T.SII._Z._Z._Z.PCT.C', 12),
-        ecbByArea('CBD2/Q..W0.67._Z._Z.A.A.I4008._Z._Z._Z._Z._Z._Z.PC', 12),
-      ]);
-      return { npl, cet1 };
+      return { npl: await ecbByArea('SUP/Q..W0._Z.I7000._T.SII._Z._Z._Z.PCT.C', 12) };
     },
   },
   {
-    id: 'struct', label: 'Structural indicators: old-age dependency, labour productivity, research spending, renewable energy, public investment, exports to the United Kingdom', provider: 'Eurostat', cadence: 'Annual / quarterly',
+    id: 'struct', label: 'Structural indicators: old-age dependency, research spending, renewable energy, exports to the United Kingdom', provider: 'Eurostat', cadence: 'Annual / quarterly',
     home: 'https://ec.europa.eu/eurostat/databrowser/explore/all/all_themes',
     run: async () => {
-      const [old, prod, rd, ren, inv, uk] = await Promise.all([
+      const [old, rd, ren, uk] = await Promise.all([
         eurostat('demo_pjanind', 'indic_de=OLDDEP1&sinceTimePeriod=2015'),
-        eurostat('nama_10_lp_ulc', 'na_item=RLPR_HW&unit=PCH_PRE&sinceTimePeriod=2015'),
         eurostat('rd_e_gerdtot', 'sectperf=TOTAL&unit=PC_GDP&sinceTimePeriod=2015'),
         eurostat('nrg_ind_ren', 'nrg_bal=REN&unit=PC&sinceTimePeriod=2015'),
-        eurostat('gov_10a_main', 'na_item=P51G&sector=S13&unit=PC_GDP&sinceTimePeriod=2015'),
         eurostat('bop_c6_q', 'partner=UK&bop_item=GS&stk_flow=CRE&currency=MIO_EUR&sector10=S1&sectpart=S1&sinceTimePeriod=2019-Q1'),
       ]);
-      return { old: old.series, prod: prod.series, rd: rd.series, ren: ren.series, inv: inv.series, uk: uk.series };
+      return { old: old.series, rd: rd.series, ren: ren.series, uk: uk.series };
     },
   },
 ];
@@ -405,7 +412,7 @@ export async function oilMonthly() {
   return { series: rows, source: 'FRED MCOILBRENTEU (U.S. EIA Brent spot, monthly average)' };
 }
 
-// Server-side only (no CORS): central-bank policy rates (BIS), monthly, for the global panel.
+// Central-bank policy rates (BIS), monthly, for the global panel; fetched by the refresh services.
 // Economies of the global panel whose policy rates the BIS publishes (UAE, Egypt, Nigeria, Kenya and
 // Singapore are not covered: their policy rate follows the Taylor rule of §4.10).
 export const ISO2 = { USA: 'US', CAN: 'CA', MEX: 'MX', BRA: 'BR', ARG: 'AR', GBR: 'GB', CHE: 'CH', NOR: 'NO', POL: 'PL', TUR: 'TR', RUS: 'RU', SAU: 'SA', ZAF: 'ZA', IND: 'IN', CHN: 'CN', JPN: 'JP', KOR: 'KR', IDN: 'ID', AUS: 'AU', SWE: 'SE', DNK: 'DK', CZE: 'CZ', HUN: 'HU', ROU: 'RO' };
@@ -420,7 +427,8 @@ export async function policyRates() {
   return { rates: out, source: 'BIS central bank policy rates (WS_CBPOL)' };
 }
 
-// Sources that only the scheduled server can fetch (no CORS); browsers receive them in the snapshot.
+// Sources fetched by the refresh services and delivered to browsers in the snapshot: the IMF and FRED do
+// not allow cross-origin requests, and the BIS is kept with them so that every browser need not ask it.
 export const SERVER_SOURCES = { imf: () => imfDataMapper(), brent: () => brentDaily(), oilm: () => oilMonthly(), rates: () => policyRates() };
 
 // Server-side only (no CORS): current IMF DataMapper vintage, used by the snapshot build.

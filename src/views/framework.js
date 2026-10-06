@@ -8,9 +8,7 @@ import { pageHead, explain } from './common.js';
 
 const VIEW_LABEL = { overview: 'Overview', detect: 'Surplus radar', simulate: 'Simulation lab', redistribute: 'Redistribution', contracts: 'Contracts & audit', forecast: 'Early warning', stability: 'Stability', framework: 'Framework', pilot: 'Pilot planner', governance: 'Design & governance', validate: 'Evidence', data: 'Data & status' };
 
-// Each equation explains itself on hover: its name and what it says, or for a supporting definition its title.
-const ABOUT = Object.fromEntries([...EQUATIONS.flatMap(e => [[e.id, `Equation ${e.n}, ${e.name}: ${e.what}`], ...e.rel.map((_, i) => [`${e.id}-r${i}`, `Definitions used by equation ${e.n}, ${e.name}: ${e.what}`])]), ...SUPPORT.map(e => [e.id, `${e.title}: a supporting definition of the model.`])]);
-const math = (key, display = true) => h('div', { class: display ? 'math' : 'math-inline', html: MATH[key] || '', 'data-tip': ABOUT[key] });
+const math = (key, display = true) => h('div', { class: display ? 'math' : 'math-inline', html: MATH[key] || '' });
 
 export function framework(root, app) {
   // Interactive explorers.
@@ -75,6 +73,6 @@ export function framework(root, app) {
       card({ title: 'Trigger switch (§4.3)', legend: [{ label: 'Sigmoid', color: SERIES[0], line: true }, { label: 'Step, rising', color: SERIES[1], line: true, dash: true }, { label: 'Step, falling', color: SERIES[2], line: true, dash: true }], body: h('div', null, rng('π_th', 1, 5, 0.1, piTh, v => { piTh = v; drawTrig(); }, 'Trigger inflation, %.'), rng('ε', 0.05, 1.5, 0.05, epsPi, v => { epsPi = v; drawTrig(); }, 'Softness of the smooth switch, points: larger means a more gradual switch.'), trigOut) }),
       card({ title: 'Routing reach (§4.6)', body: h('div', null, rng('σ (km)', 100, 3000, 50, sigma, v => { sigma = v; drawKer(); }, 'Routing reach: distance at which the routing weight has fallen to about 0.61.'), kerOut) })),
     card({ title: 'Glossary', body: h('dl', { class: 'gloss' }, GLOSSARY.flatMap(([k, v]) => [h('dt', null, k), h('dd', null, v)])) }),
-    explain('Source', h('p', null, 'Phoenix Economics Solutions: A Network Differential-Equation Framework for Real-Time Surplus Absorption, Liquidity Routing and Inflation Early Warning (4 October 2026). Section, table and figure numbers refer to that document.')));
+    explain('The paper', h('p', null, 'Phoenix Economics Solutions: A Network Differential-Equation Framework for Real-Time Surplus Absorption, Liquidity Routing and Inflation Early Warning (6 October 2026). Section, table and figure numbers refer to that document.')));
   drawFlux(); drawTrig(); drawKer();
 }

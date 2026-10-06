@@ -9,7 +9,8 @@ export const keyOf = t => String(t).replace(/\s+/g, ' ')
   .replace(/\s*\((?:Solutions\s+)?(?:§|Table|Figure)[^)]*\)/g, '')
   .replace(/\s*\(\d+(?: entries)?\)/g, '')
   .replace(/,\s*nowcast\s+\S+$/, '')
-  .replace(/ at month \d+$/, ' at month').trim();
+  .replace(/ at month \d+$/, ' at month')
+  .replace(/ at m\d+$/, ' at the horizon').replace(/ in \d+ months$/, ' over the horizon').replace(/, \d+ months$/, ', over the horizon').trim();
 
 const find = k => TIPS[k] ?? STATES[k] ?? GROUPS[k] ?? (PAGE_LABELS[k] ? PAGES[PAGE_LABELS[k]] : null);
 export function lookup(text) {
@@ -32,7 +33,9 @@ export function annotate(root) {
     if (el.closest(OWN)) continue;
     // A native title becomes the shared tooltip, so the two never show together.
     if (!el.dataset.tip && el.getAttribute('title')) { el.dataset.tip = el.getAttribute('title'); el.removeAttribute('title'); }
-    if (el.dataset.tip || el.closest('[data-tip]') !== el && el.closest('[data-tip]')) continue;
+    // An explanation of the card or the page around it does not stand in for the label's own.
+    const outer = el.closest('[data-tip]:not([data-tip-scope])');
+    if (el.dataset.tip || outer && outer !== el) continue;
     const tip = lookup(el.textContent) ?? lookup(directText(el)) ?? lookup(firstChildText(el)) ?? (el.getAttribute('aria-label') && el.tagName === 'BUTTON' ? el.getAttribute('aria-label') : null);
     // Questions and other expandable sections explain themselves once opened.
     if (!tip && el.tagName === 'SUMMARY') { el.dataset.tip = 'Select to show or hide the answer.'; continue; }
@@ -53,9 +56,9 @@ function surround(root) {
   for (const el of within(root, '.meter')) if (!el.dataset.tip) el.dataset.tip = `${el.getAttribute('aria-label') || text(el.querySelector('.meter-top span'))}: ${text(el.querySelector('.meter-top b'))}. The bar fills towards its limit and turns amber, then red, as it approaches it.`;
   for (const el of within(root, '.ledger > li')) if (!el.dataset.tip) el.dataset.tip = 'One signed entry of the audit ledger: what changed, when, the values that caused it, and the start of its hash.';
   for (const el of within(root, '.obj-chip, .state-pill')) if (!el.dataset.tip && el.getAttribute('title')) { el.dataset.tip = el.getAttribute('title'); el.removeAttribute('title'); }
-  for (const el of within(root, '.state-pill')) if (!el.dataset.tip) el.dataset.tip = `${lookup(text(el).replace(/^[\d\s]+/, '')) || 'Economies in this contract state.'} Select to see them.`;
-  for (const el of within(root, 'ol.loop > li')) if (!el.dataset.tip) el.dataset.tip = `Stage ${text(el.querySelector('.loop-n'))} of the control loop, ${text(el.querySelector('b'))}: today’s value ${text(el.querySelector('.loop-v')) || 'n/a'} (${text(el.querySelector('small'))}).`;
-  for (const el of within(root, '.hero-main')) if (!el.dataset.tip) el.dataset.tip = 'Today’s headline for the selected region: how many economies have active contracts, and inflation against the trigger.';
+  for (const el of within(root, '.state-pill')) if (!el.dataset.tip) el.dataset.tip = `${text(el.querySelector('b'))} economies. ${lookup(text(el.querySelector('.badge'))) || 'Economies in this contract state.'} Select to see them.`;
+  for (const el of within(root, 'ol.loop > li')) if (!el.dataset.tip && el.querySelector('.loop-v')) el.dataset.tip = `Stage ${text(el.querySelector('.loop-n'))} of the control loop, ${text(el.querySelector('b'))}: today’s value ${text(el.querySelector('.loop-v'))} (${text(el.querySelector('small'))}).`;
+  for (const el of within(root, '.hero-main')) if (!el.dataset.tip) { el.dataset.tip = 'Today’s headline for the selected region: how many economies have active contracts, and inflation against the trigger.'; el.dataset.tipScope = 'card'; }
   for (const el of within(root, '.hero-fig')) if (!el.dataset.tip) el.dataset.tip = 'Projected inflation at the end of the horizon with Phoenix, and without it in brackets; the difference is Phoenix’s effect.';
   for (const el of within(root, '.src-line')) if (!el.dataset.tip) el.dataset.tip = 'Publishers of the data on this page and when it was last fetched; the Data & status page lists every source.';
   for (const el of within(root, 'ol.flows > li')) if (!el.dataset.tip) { const b = el.querySelectorAll('b'); el.dataset.tip = `Wallet liquidity routed from ${text(b[0])} to ${text(b[1])} over the horizon: ${text(el.querySelector('.v'))}, across ${text(el.querySelector('.muted'))}.`; }
@@ -63,6 +66,8 @@ function surround(root) {
   for (const el of within(root, '.card')) { const t = el.querySelector('h3')?.dataset.tip; if (t) for (const part of el.querySelectorAll(':scope > .card-body, :scope > .tbl-host, :scope > .legend')) if (!part.dataset.tip) { part.dataset.tip = t; part.dataset.tipScope = 'card'; } }
   const main = document.getElementById('main');
   if (main && (root === main || main.contains(root))) { const id = location.hash.split('?')[0].slice(2) || 'overview'; for (const el of main.children) if (!el.dataset.tip && PAGES[id]) { el.dataset.tip = PAGES[id]; el.dataset.tipScope = 'page'; } }
+  // A region that scrolls must be reachable by keyboard to be scrolled.
+  for (const el of within(root, '.tbl-wrap, .ledger, .math, .rels, .tiles, .card-body')) if (!el.hasAttribute('tabindex') && (el.scrollWidth > el.clientWidth + 1 || el.scrollHeight > el.clientHeight + 1) && /auto|scroll/.test(getComputedStyle(el).overflowX + getComputedStyle(el).overflowY)) { el.tabIndex = 0; if (!el.getAttribute('role') && !/^(OL|UL|TABLE)$/.test(el.tagName)) { el.setAttribute('role', 'group'); el.setAttribute('aria-label', 'Scrollable content'); } }
   const tables = new Set(within(root, 'table'));
   const own = root.closest?.('table'); if (own) tables.add(own);
   for (const t of tables) {

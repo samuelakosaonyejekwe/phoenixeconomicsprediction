@@ -13,7 +13,7 @@
 // Current-account surpluses and central-bank reserves are indicators only (§3.8).
 import { EU, GLOBAL } from '../data/geo.js';
 import { marketDrivers, nowcastCell } from './nowcast.js';
-import { hpFilter, estimateOkunGap, estimateNowcast, estimatePhillipsRobust, outputGaps, energyOilElasticity, oilPath } from './estimation.js';
+import { hpFilter, estimateOkunGap, estimateNowcast, estimatePhillipsRobust, outputGaps, worldGapVintage, energyOilElasticity, oilPath } from './estimation.js';
 
 export const SECTORS = [
   { k: 'gov', lam: 'lamGov', sd: 'sdGov', label: 'Government', note: 'General-government currency and deposits (F2) acquired since 2020 above the 2016–2019 pace as a share of GDP; idle part F21+F22. Eurostat nasq_10_f_tr. Global panel: IMF fiscal balance.' },
@@ -85,11 +85,6 @@ export function pooledPersistence(list) {
   const a = Math.max(0.003, mean(ok.map(x => x.a)));
   const tau2 = Math.max(0, mean(ok.map(x => (x.a - a) ** 2)) - mean(ok.map(x => x.varA)));
   return { a, tau2, n: ok.length };
-}
-export function shrink(raw, pool) {
-  if (!raw) return pool.a;
-  const w = pool.tau2 / (pool.tau2 + raw.varA);
-  return clip(w * raw.a + (1 - w) * pool.a, 0.003, 0.25);
 }
 // Pooled trend half-life from the AR(1) of non-overlapping quarterly changes in inflation.
 export function pooledHalfLife(seriesList) {
@@ -215,18 +210,6 @@ export function depositDecay(data, sec, asOf) {
   return { months: -12 / Math.log(rho), rhoA: rho };
 }
 
-// Quarterly persistence of the excess saving rate (pooled), giving the decay time of new inflows.
-export function inflowDecay(seriesList) {
-  let num = 0, den = 0;
-  for (const rows of seriesList) {
-    const m = mean(rows.map(r => r[1]));
-    const d = rows.map(r => r[1] - m);
-    for (let t = 1; t < d.length; t++) { num += d[t] * d[t - 1]; den += d[t - 1] * d[t - 1]; }
-  }
-  const rho = den > 0 ? clip(num / den, 0.05, 0.98) : 0.8;
-  return { months: -3 / Math.log(rho), rhoQ: rho };
-}
-
 // ---------------------------------------------------------------------------
 // Slack (§3.5): natural rate by HP filter (λ = 100) on annual unemployment including the IMF
 // projections to t+5; output gap from the HP trend of real GDP.
@@ -238,6 +221,12 @@ function slack(imf, uNow, okunOf, iso, Y, gaps, uMonthly = null, okunPooled = 2.
     const i = u.findIndex(r => +r[0] === Y);
     uBar = trend[i >= 0 ? i : trend.length - 1];
   }
+  // Current unemployment is Eurostat's monthly rate where there is one, while the trend is fitted to the
+  // IMF's annual series. Where the two publishers measure unemployment differently (Denmark's national
+  // registered rate is about 3.5 points below the survey rate) the natural rate is moved by the difference
+  // between their rates of the previous year, so that the gap compares like with like.
+  const uY1ref = atYear(imf.unemp, Y - 1);
+  if (uBar !== null && uMonthly && uY1ref != null) uBar += uMonthly.prevYearMean - uY1ref;
   const ugap = uBar === null || uNow == null ? 0 : uNow - uBar;
   // Output gap from GDP (§3.5), updated with the latest monthly unemployment: the gap moves with the
   // difference between current unemployment and the IMF's annual figure, scaled by the pooled Okun
@@ -261,7 +250,8 @@ function anchorFor(c, data, imf, asOf, Y = asOf ? +asOf.slice(0, 4) : refYearOf(
 
 export function buildCells(data, region, { nowcast = true, P = {}, asOf = null } = {}) {
   const ctx = context(data, P, asOf);
-  if (region === 'global' && ctx.psiMed.hh == null) buildEurope(data, 'eu', ctx);
+  // The global panel scales by the EU-27 ratio whatever region was built before it.
+  if (region === 'global' && !ctx.psiFromEU) buildEurope(data, 'eu', ctx);
   const cells = region === 'global' ? buildGlobal(data, ctx) : buildEurope(data, region, ctx);
   const drivers = asOf ? null : marketDrivers(data);
   for (const c of cells) {
@@ -294,12 +284,13 @@ export function context(data, P = {}, asOf = null) {
     for (const [iso, v] of Object.entries(vin)) imfC[iso] = { ...(imfC[iso] || {}), growth: v.growth?.map(([y, x]) => [String(y), x]), unemp: v.unemp?.map(([y, x]) => [String(y), x]), infl: v.infl?.map(([y, x]) => [String(y), x]) };
   }
   const gaps = outputGaps(imfC, [...EU, ...GLOBAL.filter(g => !EU.some(e => e.iso3 === g.iso3))]);
-  const okun = estimateOkunGap(imfC, gaps);
   const refYear = asOf ? +asOf.slice(0, 4) : refYearOf(data);
+  // Okun's law on observed years only: projection years of the vintage in use are not observations.
+  const okun = estimateOkunGap(imfC, gaps, EU, 2000, refYear - 1);
   // Core Phillips curve and reversion from one estimation (§5.1), on the output gaps of the IMF vintage in
   // use. Every economy reverts at the panel speed (§3.6); the monthly per-economy estimates are kept only
   // for the homogeneity diagnostics.
-  const rob = estimatePhillipsRobust(data, { y1: refYear - 1, gaps });
+  const rob = estimatePhillipsRobust(data, { y1: refYear - 1, gaps, world: (asOf && worldGapVintage(data.weoVintages, refYear)) || undefined });
   const phillips = rob ? { ...rob.iv, eMean: rob.eMean, robust: rob } : null;
   const coreOf = c => cut(data.hicpx?.core?.[c.eu]?.filter(r => r[0] >= '2010-01'), asOf);
   const raws = new Map(EU.map(c => [c.eu, persistenceRaw(coreOf(c), anchorFor(c, data, imfC[c.iso3] || {}, asOf).anchor)]));
@@ -312,7 +303,6 @@ export function context(data, P = {}, asOf = null) {
   const Lq = (() => { const end = asOf ? qPub(asOf) : (data.finacc?.hh?.F2?.DE?.at(-1)?.[0] || '2026-Q1'); return qIndex(end) - qIndex(start) + 1; })();
   const crit = criticalFromHistory(data, Lq, asOf);
   if (crit) Object.assign(crit, { path: criticalPath(data, Lq) });
-  const med = arr => { const a = arr.filter(x => x != null).sort((x, y) => x - y); return a.length ? a[Math.floor(a.length / 2)] : 0.5; };
   const psiMed = { hh: null, corp: null, gov: null }; // filled after the first pass over economies
   const out = { refYear, imfC, okun, gaps, phillips, raws, pool, crit, half: hl.half, phiQ: hl.phiQ, decay, psiMed, start, mode: P.baseline || 'b1619', asOf, nowcast: estimateNowcast(data), elasticity: energyOilElasticity(data), oilYoy: oilPath(data, { asOf, mode: 'flat' })?.yoy || null };
   ctxCache.set(key, out);
@@ -404,9 +394,12 @@ function buildEurope(data, region, ctx) {
   }
   // Ratio of excess deposits to accumulated excess saving in the EU, used for economies without
   // financial accounts (the global panel).
-  for (const k of ['hh', 'corp', 'gov']) {
-    const a = cells.reduce((x, c) => x + c.sectors[k], 0), b = cells.reduce((x, c) => x + c.excessSaving[k], 0);
-    ctx.psiMed[k] = b > 0 ? clip(a / b, 0, 1) : 0.3;
+  if (region !== 'ea') {
+    for (const k of ['hh', 'corp', 'gov']) {
+      const a = cells.reduce((x, c) => x + c.sectors[k], 0), b = cells.reduce((x, c) => x + c.excessSaving[k], 0);
+      ctx.psiMed[k] = b > 0 ? clip(a / b, 0, 1) : 0.3;
+    }
+    ctx.psiFromEU = true;
   }
   return cells;
 }

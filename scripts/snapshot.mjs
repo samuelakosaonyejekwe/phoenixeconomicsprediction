@@ -4,7 +4,7 @@
 // snapshot in the repository), and the failure is reported as a CI warning.
 import { writeFile, mkdir, readFile } from 'node:fs/promises';
 import { CONNECTORS, SERVER_SOURCES } from '../src/data/sources.js';
-import { checkSource } from '../src/data/check.js';
+import { checkSource, compact } from '../src/data/check.js';
 
 const OUT = new URL('../public/data/snapshot.json', import.meta.url);
 const mirrors = JSON.parse(await readFile(new URL('../mirrors.json', import.meta.url), 'utf8'));
@@ -14,7 +14,7 @@ async function deployed() {
   for (const base of [mirrors.primary, ...(mirrors.dataEndpoints || [])]) {
     try {
       const url = base.endsWith('.json') ? base : new URL('data/snapshot.json', base).href;
-      const r = await fetch(url, { headers: { 'user-agent': 'PhoenixEconomics-build' } });
+      const r = await fetch(url, { headers: { 'user-agent': 'PhoenixEconomics-build' }, signal: AbortSignal.timeout(30000) });
       if (r.ok) { const j = await r.json(); if (j?.sources) return j; }
     } catch {}
   }
@@ -45,5 +45,5 @@ if (!Object.keys(sources).length) {
   process.exit(1);
 }
 await mkdir(new URL('../public/data/', import.meta.url), { recursive: true });
-await writeFile(OUT, JSON.stringify({ builtAt: new Date().toISOString(), sources }, (k, v) => (typeof v === 'number' && !Number.isInteger(v) ? +v.toPrecision(6) : v)));
+await writeFile(OUT, JSON.stringify({ builtAt: new Date().toISOString(), sources }, compact));
 console.log('snapshot written');

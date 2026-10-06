@@ -193,7 +193,7 @@ export function simulate(root, app) {
     pageHead('Simulation lab', 'The coupled model of §4, solved on the selected economies from today’s data. Change any parameter and every chart, map and alert updates.',
       h('div', { class: 'row' },
         h('button', { class: 'btn btn-ghost', onclick: () => { app.logSimulation(sim); toast(`${Math.min(200, sim.events.length)} contract events written to the audit ledger.`); } }, icon('shield', 16), 'Log to ledger'),
-        h('button', { class: 'btn btn-ghost', onclick: exportCsv }, icon('download', 16), 'CSV'),
+        h('button', { class: 'btn btn-ghost', 'data-tip': 'Download the simulation results as CSV.', onclick: exportCsv }, icon('download', 16), 'CSV'),
         h('button', { class: 'btn btn-ghost', onclick: () => app.resetParams() }, icon('refresh', 16), 'Reset'))),
     card({ title: 'Scenario', sub: 'Live conditions, the EU-27 today, the EU-27 on the data published by 31 December 2021, or a stress scenario', body: scen }),
     h('div', { class: 'lab' },

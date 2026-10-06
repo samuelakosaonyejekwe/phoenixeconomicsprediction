@@ -1,6 +1,6 @@
 # Phoenix Economics
 
-A live, installable web application implementing **Phoenix Economics Solutions: A Network Differential-Equation Framework for Real-Time Surplus Absorption, Liquidity Routing and Inflation Early Warning** (4 October 2026). Section, table and figure references in the app (Solutions §…) are to that paper.
+A live, installable web application implementing **Phoenix Economics Solutions: A Network Differential-Equation Framework for Real-Time Surplus Absorption, Liquidity Routing and Inflation Early Warning** (6 October 2026, on data archived on 4 October 2026). Section, table and figure references in the app (Solutions §…) are to that paper.
 
 The coupled model runs in the visitor's browser on today's official data for the euro area, the EU-27 or a 29-economy global panel: excess deposits by sector against a threshold set from history, contract activation, absorption, PHX credits, wallets, routing, recall, the output gap, energy and core inflation with a Phillips curve estimated by instrumental variables, the policy rate, and the loss. Every result is shown against a no-Phoenix counterfactual.
 
@@ -33,27 +33,27 @@ Three pages run beside the core model on data each browser fetches itself, and w
 
 The models are in `src/model/programmes.js`, their settings are stored per device, and `test/programmes.test.mjs` checks each rule.
 
-The **Evidence** page shows the paper's results and reproduces them in the browser: it runs the same function as the paper's computation script (`src/model/reproduce.js`) on the archived data of 4 October 2026 and compares every published value. It also shows the paper's methodological risk register (Table 20): each risk, how it is removed or bounded, and the step that resolves it.
+The **Evidence** page shows the paper's results and reproduces them in the browser: it runs the same function as the paper's computation script (`src/model/reproduce.js`) on the archived data of 4 October 2026 and compares every value of the paper's core results — measurement, estimation, scenarios, sensitivity and instruments — with the published ones, to a relative tolerance of 10⁻⁹. The forecast backtest, the optimisation frontier, the stress tests, the trial simulations and the stability analysis take longer and are checked by `npm run test:full`. It also shows the paper's methodological risk register (Table 20): each risk, how it is removed or bounded, and the step that resolves it.
 
 ## Reproducing the paper
 
 ```sh
 npm ci
-npm test                         # mechanisms, ledger and the paper's core results
-npm run test:full                # recompute every published result and require equality (about 10 minutes)
+npm test                         # mechanisms, programme rules, ledger and the paper's core results
+npm run test:full                # recompute every published result and require equality to 1e-9 (about 10 minutes)
 npm run paper                    # rewrite results, stability, tables (CSV) and figures (numpy, matplotlib)
 ```
 
-`paper/` holds the archived data (`vintage-2026-10-04.json`), the IMF forecast vintages used for the real-time tests (`weo-vintages.json`) and for the global monitor's forecast errors (`weo-inflation-global.json`), the published results and the scripts. Release **Phoenix Economics 1.0** (tag `v1.0`) marks the exact code and data of the paper.
+`paper/` holds the archived data (`vintage-2026-10-04.json`), the IMF forecast vintages used for the real-time tests (`weo-vintages.json`: the EU economies, and growth and GDP of the other economies of the global panel for the rest-of-world instrument) and for the global monitor's forecast errors (`weo-inflation-global.json`), the published results and the scripts. Release **Phoenix Economics 1.0** (tag `v1.0`) marks the exact code and data of the paper.
 
 ## Data and freshness
 
-The model runs entirely in the visitor's browser. Each browser fetches Eurostat, ECB, World Bank, DBnomics and INSEE data directly from the publishers when the app opens and every 15 minutes while it is open, checks that the new data are plausible (non-empty, latest observation recent for the source's cadence), and stores them on the device. Sources that browsers cannot fetch (the current IMF DataMapper vintage, BIS policy rates, Brent prices from FRED) come from two baseline snapshots:
+The model runs entirely in the visitor's browser. Each browser fetches Eurostat, ECB, World Bank, DBnomics and INSEE data directly from the publishers (and the ECB's daily reference exchange rates through Frankfurter, an open relay of them) when the app opens and every 15 minutes while it is open, checks that the new data are plausible (non-empty, and the latest observation of every series the app relies on recent for its cadence), and stores them on the device. Three publishers are fetched by the refresh services instead — the IMF DataMapper (current vintage) and FRED (Brent prices), which do not accept requests from browsers, and the BIS (policy rates) — and reach the app in two baseline snapshots, which it re-reads at start-up and then hourly:
 
-- **GitHub:** the workflow `.github/workflows/deploy.yml` rebuilds `data/snapshot.json` every hour and redeploys GitHub Pages and Cloudflare Pages. A source that fails keeps its last deployed copy and the run reports a warning.
-- **Cloudflare:** the worker `phoenix-refresh` (`cloudflare/`) refreshes one of six source groups every 10 minutes, so every source hourly, and serves its snapshot at https://phoenix-refresh.flame-in-freefall.workers.dev/snapshot.json. On the Cloudflare host, `data/snapshot.json` is served from it by a Pages function (`functions/`). The same worker hosts the anchor log of the audit ledger and, once an hour, starts the GitHub workflow if it is overdue (`/health` reports its state).
+- **GitHub:** the workflow `.github/workflows/deploy.yml` rebuilds `data/snapshot.json` and redeploys GitHub Pages and Cloudflare Pages every hour: on GitHub's own schedule, and, because that schedule is often late or skipped, whenever the Cloudflare worker's hourly check finds the last run more than 50 minutes old. A source that fails keeps its last deployed copy and the run reports a warning.
+- **Cloudflare:** the worker `phoenix-refresh` (`cloudflare/`) checks one of six source groups every 10 minutes, so every source hourly, stores a source when its data changed, and serves its snapshot at https://phoenix-refresh.flame-in-freefall.workers.dev/snapshot.json. On the Cloudflare host, `data/snapshot.json` is served from it by a Pages function (`functions/`). The same worker hosts the anchor log of the audit ledger and, once an hour, starts the GitHub workflow if it is overdue (`/health` reports its state).
 
-The app takes the newest plausible copy of each source from both, so either service can be down without stopping it.
+The app applies the same plausibility check to every copy and takes the newest plausible one of each source from both, so either service can be down without stopping it.
 
 ## Offline and installation
 
@@ -70,11 +70,13 @@ The app is a Progressive Web App: installable on Windows, macOS, Linux, ChromeOS
 
 | Command | What it checks | In CI |
 |---|---|---|
-| `npm test` | Model mechanisms, the ledger and Rekor verification, and the reproduction of the paper's core results | Every run |
-| `npm run test:e2e` | The built application in a headless browser under its own Content Security Policy: every page, the December 2021 scenario and the in-browser reproduction | Every run |
-| `npm run test:full` | Recomputes every published result of the paper (about ten minutes) and requires equality with `paper/results-2026-10-04.json` | Every change of the code |
+| `npm test` | Model mechanisms, the rules of the stabilisation programmes, the data checks, the ledger and Rekor verification, and the reproduction of the paper's core results | Every run |
+| `npm run test:e2e` | The built application in a headless browser under its own Content Security Policy: every page and its hover explanations, the December 2021 scenario, the in-browser reproduction, opening offline after a first visit and the single-file edition | Every run |
+| `npm run test:full` | Recomputes every published result of the paper (about ten minutes locally, five in CI) and requires equality with `paper/results-2026-10-04.json` to a relative tolerance of 10⁻⁹ | Every push |
 
 ## Develop
+
+Node 20 or later (CI uses 22); `npm run paper` also needs Python 3 with numpy and matplotlib.
 
 ```sh
 npm ci
@@ -86,4 +88,4 @@ npm test           # regression tests
 
 ## Security
 
-Strict Content-Security-Policy (scripts from the app's own origin only; network access limited to the named data publishers, the Rekor transparency log and the app's own hosts), no cookies, no tracking, no third-party code at runtime, all external text inserted as text nodes, refusal to run inside another site's frame, and security headers via `_headers` on Cloudflare Pages. The deployment workflow runs with read-only repository permissions except for the Pages deployment, and its actions are pinned to exact versions.
+Strict Content-Security-Policy (scripts from the app's own origin only; network access limited to the data publishers named above with the Frankfurter relay, the Rekor transparency log and the app's own hosts), no cookies, no tracking, no third-party code at runtime, all external text inserted as text nodes, refusal to run inside another site's frame, and security headers via `_headers` on Cloudflare Pages. The deployment workflow runs with read-only repository permissions except for the Pages deployment, and its actions and the deployment tool are pinned to exact versions. Every run checks the dependencies against the registry's advisory database (`npm audit`) and reports a warning; the browser test replaces the anchor service with a local stand-in, so test runs enter nothing in the public transparency log.

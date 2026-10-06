@@ -5,6 +5,7 @@ import katex from 'katex';
 import { Resvg } from '@resvg/resvg-js';
 import { createHash } from 'node:crypto';
 import { mkdir, readFile, writeFile, rm, copyFile, readdir } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
 import { EQUATIONS, SUPPORT } from '../src/content/equations.js';
 
 const root = new URL('../', import.meta.url);
@@ -29,10 +30,10 @@ await mkdir(p('dist/icons/'), { recursive: true });
 await mkdir(p('dist/data/'), { recursive: true });
 const common = { bundle: true, minify: true, target: ['es2020'], legalComments: 'none', write: false, format: 'iife' };
 const [appB, mcB, reproB, cssB] = await Promise.all([
-  build({ ...common, entryPoints: [p('src/main.js').pathname] }),
-  build({ ...common, entryPoints: [p('src/workers/montecarlo.js').pathname] }),
-  build({ ...common, entryPoints: [p('src/workers/reproduce.js').pathname] }),
-  build({ ...common, format: undefined, entryPoints: [p('static/app.css').pathname], loader: { '.css': 'css' } }),
+  build({ ...common, entryPoints: [fileURLToPath(p('src/main.js'))] }),
+  build({ ...common, entryPoints: [fileURLToPath(p('src/workers/montecarlo.js'))] }),
+  build({ ...common, entryPoints: [fileURLToPath(p('src/workers/reproduce.js'))] }),
+  build({ ...common, format: undefined, entryPoints: [fileURLToPath(p('static/app.css'))], loader: { '.css': 'css' } }),
 ]);
 const appJs = appB.outputFiles[0].text, mcJs = mcB.outputFiles[0].text, reproJs = reproB.outputFiles[0].text, css = cssB.outputFiles[0].text;
 const bootJs = await readFile(p('static/boot.js'), 'utf8');
@@ -40,7 +41,7 @@ const mirrorsCfg = JSON.parse(await readFile(p('mirrors.json'), 'utf8'));
 const configJs = `self.PHX_MIRRORS=${JSON.stringify(mirrorsCfg.mirrors)};self.PHX_DATA_ENDPOINTS=${JSON.stringify(mirrorsCfg.dataEndpoints || [])};`;
 
 let snapshot = '{}';
-try { snapshot = await readFile(p('public/data/snapshot.json'), 'utf8'); } catch { console.warn('No snapshot found; run npm run snapshot'); }
+try { snapshot = await readFile(p('public/data/snapshot.json'), 'utf8'); } catch { console.error('No data snapshot found: run `npm run snapshot` first.'); process.exit(1); }
 
 const files = { 'app.js': appJs, 'mc.js': mcJs, 'repro.js': reproJs, 'app.css': css, 'boot.js': bootJs, 'config.js': configJs };
 const v = Object.fromEntries(Object.entries(files).map(([k, c]) => [k, hash(c)]));
@@ -134,7 +135,23 @@ const assets = `<link rel="manifest" href="manifest.webmanifest">
 <script defer src="app.js?v=${v['app.js']}"></script>`;
 const html = head(csp("'self'"), assets);
 await writeFile(p('dist/index.html'), html);
-await writeFile(p('dist/404.html'), html);
+// Unknown addresses lead back to the app on whichever host serves them (its relative assets would not
+// load from a nested path). A small page of its own, outside the app's Content Security Policy.
+const roots = Object.fromEntries(mirrorsCfg.mirrors.map(m => [new URL(m).hostname, new URL(m).pathname]));
+await writeFile(p('dist/404.html'), `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Phoenix Economics</title>
+<script>location.replace(${JSON.stringify(roots)}[location.hostname] || '/');</script>
+</head>
+<body>
+<p style="font:16px system-ui;padding:24px">This page does not exist. <a href="./">Open Phoenix Economics</a>.</p>
+</body>
+</html>
+`);
 
 // 6. Service worker.
 const precache = ['./', 'index.html', `app.js?v=${v['app.js']}`, `app.css?v=${v['app.css']}`, `boot.js?v=${v['boot.js']}`, `config.js?v=${v['config.js']}`, 'mc.js', 'repro.js',
@@ -166,7 +183,7 @@ await writeFile(p('dist/_headers'), headers);
 
 // Guard: source documents (.pdf, .docx, .doc) must never be published.
 const walk = async dir => (await readdir(dir, { withFileTypes: true })).flatMap(async e => e.isDirectory() ? walk(`${dir}/${e.name}`) : [`${dir}/${e.name}`]);
-const allFiles = (await Promise.all(await walk(DIST.pathname.replace(/\/$/, '')))).flat(Infinity);
+const allFiles = (await Promise.all(await walk(fileURLToPath(DIST).replace(/\/$/, '')))).flat(Infinity);
 const banned = allFiles.filter(f => /\.(pdf|docx?|dotx)$/i.test(f));
 if (banned.length) { console.error('Refusing to build: document files found in dist:', banned); process.exit(1); }
 

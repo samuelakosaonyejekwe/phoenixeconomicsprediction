@@ -1,4 +1,4 @@
-import { h, num, eur, pct } from '../ui/dom.js';
+import { h, num, eur } from '../ui/dom.js';
 import { card, heatMatrix, stackedBars, meter, SERIES, lineChart } from '../ui/charts.js';
 import { kernelMatrix, needIndex } from '../model/engine.js';
 import { distanceKm } from '../data/geo.js';
@@ -38,7 +38,7 @@ export function redistribute(root, app) {
       card({
         title: 'Routing kernel now', sub: 'Rows: source, columns: target. K = distance weight (reach widened by local inflation dispersion) × need of the target × export propensity of the source × room of the target below the trigger, within a currency area (Solutions §4.6).',
         body: heatMatrix({ matrix: K, labels: cells.map(c => c.id), fmt: v => (v === 0 ? '0' : Math.abs(v) >= 0.01 ? num(v, 3) : Number(v.toPrecision(2)).toString()), title: 'K' }),
-        table: () => ({ cols: ['Source', ...cells.map(c => c.id)], rows: K.map((r, i) => [cells[i].id, ...r.map(v => (v === 0 ? '0' : Number(v.toPrecision(3)).toString()))]) }),
+        table: () => ({ cols: ['From → to', ...cells.map(c => c.id)], rows: K.map((r, i) => [cells[i].id, ...r.map(v => (v === 0 ? '0' : Number(v.toPrecision(3)).toString()))]) }),
       }),
       card({
         title: 'Largest liquidity corridors', sub: 'Cumulative routed wallet transfers over the horizon',

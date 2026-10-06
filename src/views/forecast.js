@@ -1,4 +1,4 @@
-import { h, num, pct, eur } from '../ui/dom.js';
+import { h, num, pct } from '../ui/dom.js';
 import { card, lineChart, SERIES, sparkline } from '../ui/charts.js';
 import { pageHead, explain, empty, objectiveChips, openCountry, sourceLine, kpi } from './common.js';
 
@@ -14,8 +14,8 @@ export function forecast(root, app) {
 
   const table = h('div', { class: 'tbl-wrap' }, h('table', { class: 'tbl' },
     h('thead', null, h('tr', null, ['Economy', 'Signal', 'Trend', 'Now', '+6 m', '+12 m', 'IMF next year', 'P(breach)', 'Trigger in', 'S/S_crit now → next year'].map(c => h('th', { scope: 'col' }, c)))),
-    h('tbody', null, rows.map(({ c, f }) => h('tr', { class: 'click', onclick: () => openCountry(app, c) },
-      h('th', { scope: 'row' }, c.name), h('td', null, h('span', { class: ['badge', `t-${TONE[f.status][0]}`] }, TONE[f.status][1])),
+    h('tbody', null, rows.map(({ c, f }) => h('tr', null,
+      h('th', { scope: 'row' }, h('button', { class: 'chip', 'data-tip': `${c.name}: select for its details.`, onclick: () => openCountry(app, c) }, c.name)), h('td', null, h('span', { class: ['badge', `t-${TONE[f.status][0]}`] }, TONE[f.status][1])),
       h('td', null, sparkline([...c.piHist.slice(-12).map(r => r[1]), ...f.path.slice(0, 6)], { color: f.status === 'act' ? '#d03b3b' : 'var(--s1)' })),
       h('td', null, pct(c.pi)), h('td', null, pct(f.path[5], 1)), h('td', null, pct(f.path[11], 1)), h('td', null, f.imfNext === undefined ? '–' : pct(f.imfNext, 1)),
       h('td', null, `${num(f.pBreach * 100, 0)}%`), h('td', null, f.firstBreach === 0 ? 'breached' : f.firstBreach ? `${f.firstBreach} mo` : '–'),

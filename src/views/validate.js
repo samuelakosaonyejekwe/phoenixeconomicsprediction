@@ -1,4 +1,4 @@
-import { h, num, pct, eur, icon } from '../ui/dom.js';
+import { h, num, eur, icon } from '../ui/dom.js';
 import { card, lineChart, SERIES, dataTable } from '../ui/charts.js';
 import { estimatePhillipsRobust } from '../model/estimation.js';
 import { context } from '../model/inputs.js';
@@ -53,14 +53,14 @@ export function validate(root, app) {
 
   const reproCard = card({
     title: 'Reproduce the paper in this browser (§9.6)',
-    sub: 'Runs the same code as the paper’s computation script on the archived data of 4 October 2026 and compares every published number. Takes one to three minutes.',
+    sub: 'Runs the same code as the paper’s computation script on the archived data of 4 October 2026 and compares every number of the paper’s core results, to a relative tolerance of 10⁻⁹. Takes one to three minutes.',
     actions: h('button', { class: 'btn', disabled: repro.state === 'running', onclick: () => runReproduction(app) }, icon('refresh', 16), repro.state === 'running' ? 'Running…' : repro.state === 'done' ? 'Run again' : 'Reproduce'),
     body: repro.state === 'idle' ? h('p', { class: 'sub' }, 'Not run yet.')
       : repro.state === 'running' ? h('p', { class: 'sub', role: 'status' }, `${repro.progress}… (${Math.round((Date.now() - repro.t0) / 1000)} s)`)
       : repro.state === 'error' ? h('p', { class: 'note', role: 'alert' }, repro.error)
       : h('div', null,
         h('p', { role: 'status' }, h('span', { class: ['badge', repro.mismatches.length ? 't-crit' : 't-good'] }, icon(repro.mismatches.length ? 'alert' : 'ok', 14), repro.mismatches.length ? `${repro.mismatches.length} differences` : 'Exact match'),
-          ` ${repro.matched.toLocaleString('en')} of ${repro.checked.toLocaleString('en')} published values reproduced in ${num(repro.seconds, 0)} s from the data archived on ${repro.builtAt?.slice(0, 10)}.`),
+          ` ${repro.matched.toLocaleString('en')} of ${repro.checked.toLocaleString('en')} published values of the core results reproduced in ${num(repro.seconds, 0)} s from the data archived on ${repro.builtAt?.slice(0, 10)}.`),
         dataTable({ cols: ['Result', 'Paper', 'This browser', 'Where'], rows: repro.headlines.map(x => [x.label, f3(x.want), f3(x.got), x.where]) }),
         repro.mismatches.length ? dataTable({ cols: ['Value', 'Paper', 'This browser'], rows: repro.mismatches.map(m => [m.path, String(m.want), String(m.got)]) }) : null),
   });
@@ -71,7 +71,7 @@ export function validate(root, app) {
       kpi({ label: 'Phillips slope κ (IV), live data', value: live.ph ? num(live.ph.iv.kappa, 3) : '–', sub: live.ph ? `s.e. ${num(live.ph.iv.kappaSe, 3)} · first-stage F ${num(live.ph.iv.firstStageF, 0)} · ${live.ph.iv.n} obs. (paper: ${o ? num(o.phillips.full.iv.kappa, 3) : '…'})` : 'Data loading' }),
       kpi({ label: 'Threshold S_crit, live data', value: live.crit ? `${num(live.crit.p90, 1)}% of GDP` : '–', sub: live.crit ? `90th percentile of ${live.crit.n} pre-2020 windows of ${live.crit.L} quarters (paper: ${o ? num(o.measure.crit.p90, 1) : '…'}%)` : '' }),
       kpi({ label: 'Conservation, current run', value: sim && Math.abs(sim.totals.residual) < 1e-6 ? 'Exact' : sim ? eur(sim.totals.residual, 6) : '–', sub: 'Absorbed + premiums = credits + wallets + spent + matured + recalled (§4.13)' }),
-      kpi({ label: 'Parameters', value: changed.length ? `${changed.length} changed` : 'Paper defaults', sub: changed.length ? `Live results below use your settings: ${changed.slice(0, 4).join(', ')}${changed.length > 4 ? '…' : ''}` : 'Table 6 of the paper' })),
+      kpi({ label: 'Parameter settings', value: changed.length ? `${changed.length} changed` : 'Paper defaults', sub: changed.length ? `Live results below use your settings: ${changed.slice(0, 4).join(', ')}${changed.length > 4 ? '…' : ''}` : 'Table 6 of the paper' })),
     reproCard,
   ];
 
@@ -128,7 +128,7 @@ export function validate(root, app) {
 
   blocks.push(
     explain('How to read this page',
-      h('p', null, 'The paper’s numbers come from one script (paper/compute.mjs) run on data archived on 4 October 2026. Its core — measurement, estimation, scenarios, sensitivity and instruments — is a single function in the application’s own model code, and “Reproduce” runs that function here on the same archived data and compares every published value. The forecast backtest, the optimisation frontier and the stress tests take longer and are shown as published; the repository’s regression tests check them with the rest.'),
+      h('p', null, 'The paper’s numbers come from one script (paper/compute.mjs) run on data archived on 4 October 2026. Its core — measurement, estimation, scenarios, sensitivity and instruments — is a single function in the application’s own model code, and “Reproduce” runs that function here on the same archived data and compares every value it produces with the published one. The forecast backtest, the optimisation frontier, the stress tests, the trial simulations and the stability analysis take longer and are shown as published; the repository’s regression tests check them with the rest.'),
       h('p', null, 'The cards at the top recompute key estimates from today’s live data, so they move as new data are published; the paper’s values are shown alongside for comparison.'),
       h('p', null, 'The central finding is that absorbing idle money moves inflation by thousandths of a percentage point — far below the 0.1-point rounding of published inflation. Phoenix’s measurable contributions are measuring idle money, managing exceptional stocks under legal control, early warning and a verifiable audit trail (§7–8, §12).')),
     objectiveChips([3, 10, 12]));

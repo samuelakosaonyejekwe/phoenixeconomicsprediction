@@ -5,14 +5,15 @@ const WORKER = 'https://phoenix-refresh.flame-in-freefall.workers.dev/snapshot.j
 export async function onRequest({ request, env }) {
   try {
     const ctl = new AbortController();
-    const t = setTimeout(() => ctl.abort(), 6000);
+    // Shorter than the 5 s the app's service worker waits, so the fallback below can still answer in time.
+    const t = setTimeout(() => ctl.abort(), 3500);
     const res = await fetch(WORKER, { signal: ctl.signal });
     clearTimeout(t);
     // Served only if it is a real snapshot; otherwise the file built with the site is used.
     const text = res.ok ? await res.text() : '';
-    let good = false; try { const j = JSON.parse(text); good = !!(j.builtAt && j.sources && Object.keys(j.sources).length); } catch {}
+    const good = text.startsWith('{"builtAt":"') && text.includes('"sources":{"') && text.endsWith('}}}');
     if (good) {
-      return new Response(text, { headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-cache', 'x-content-type-options': 'nosniff', 'x-snapshot-source': 'cloudflare-worker' } });
+      return new Response(text, { headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-cache', 'x-content-type-options': 'nosniff', 'access-control-allow-origin': '*', 'x-snapshot-source': 'cloudflare-worker' } });
     }
   } catch {}
   return env.ASSETS.fetch(request);

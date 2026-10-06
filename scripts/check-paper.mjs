@@ -6,9 +6,10 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { compareResults } from '../src/model/compare.js';
 
-const root = new URL('..', import.meta.url).pathname; // repository root
+const root = fileURLToPath(new URL('..', import.meta.url)); // repository root
 const out = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'phx-')), 'results.json');
 execFileSync('node', [path.join(root, 'paper/compute.mjs'), path.join(root, 'paper/vintage-2026-10-04.json'), out], { stdio: 'inherit' });
 execFileSync('python3', [path.join(root, 'paper/stability.py'), out], { stdio: 'ignore' });

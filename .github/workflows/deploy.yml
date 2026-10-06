@@ -17,7 +17,7 @@ concurrency:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -27,6 +27,8 @@ jobs:
       - name: Refuse documents (.pdf, .docx) in the repository
         run: "! git ls-files | grep -iE '\\.(pdf|docx?|dotx)$'"
       - run: npm ci
+      - name: Known vulnerabilities in dependencies (reported as a warning; the registry's advisory database)
+        run: npm audit --audit-level=high || echo "::warning title=Dependencies::npm audit reports a vulnerability of high or critical severity; run npm audit locally."
       - name: Tests (model, ledger and reproduction of the paper's core results)
         run: npm test
       - name: Refresh the data snapshot (sources that fail keep their last deployed copy, with a warning)
@@ -46,10 +48,11 @@ jobs:
           retention-days: 1
 
   paper:
-    # On every change of the code: recompute every published result of the paper from the archived data
-    # and require it to equal paper/results-2026-10-04.json (about ten minutes).
-    if: github.event_name != 'schedule'
-    runs-on: ubuntu-latest
+    # On every push: recompute every published result of the paper from the archived data and require it
+    # to equal paper/results-2026-10-04.json (about five minutes). Data refreshes (scheduled or started by
+    # the watchdog) change no code and skip it, so they deploy without waiting.
+    if: github.event_name == 'push'
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -57,13 +60,17 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: python3 -m pip install --quiet numpy
+      - name: numpy for the stability analysis, in a virtual environment (system Python is externally managed on newer images)
+        run: |
+          python3 -m venv .venv
+          .venv/bin/pip install --quiet numpy==2.3.4
+          echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
       - run: npm run test:full
 
   pages:
     needs: [build, paper]
     if: always() && needs.build.result == 'success' && (needs.paper.result == 'success' || needs.paper.result == 'skipped')
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       pages: write
       id-token: write
@@ -78,7 +85,7 @@ jobs:
     # Cloudflare Pages mirror, with the Pages function that serves the refresh worker's snapshot.
     needs: [build, paper]
     if: always() && needs.build.result == 'success' && (needs.paper.result == 'success' || needs.paper.result == 'skipped')
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

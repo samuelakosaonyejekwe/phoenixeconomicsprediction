@@ -8,11 +8,11 @@ import { COMMODITIES } from '../data/sources.js';
 
 export const PROG_GROUPS = [
   { id: 'triggers', title: 'Trigger board', params: [
-    { k: 'm3Th', label: 'Money-growth trigger (M3, % a year)', min: 2, max: 12, step: 0.5, def: 5, help: 'Annual growth of the broad money stock M3 above which the monetary condition of the trigger board is met.' },
-    { k: 'creditTh', label: 'Credit-growth trigger (% a year)', min: 2, max: 15, step: 0.5, def: 6, help: 'Annual growth of bank loans to households above which credit counts as a second monetary signal and as leverage in the asset-price monitor.' },
+    { k: 'm3Th', label: 'Money-growth trigger (% a year)', min: 2, max: 12, step: 0.5, def: 5, help: 'Annual growth of broad money M3, narrow money M1 or currency in circulation at or above which that aggregate counts as a monetary signal on the trigger board.' },
+    { k: 'creditTh', label: 'Credit-growth trigger (% a year)', min: 2, max: 15, step: 0.5, def: 6, help: 'Annual growth of bank loans to households or to firms at or above which credit counts as a monetary signal; the household figure is also the leverage signal of the asset-price monitor.' },
     { k: 'deflTh', label: 'Deflation floor (%)', min: -1, max: 1.5, step: 0.1, def: 0.5, help: 'Inflation below this floor reverses the mechanism: PHX is converted back into Digital Euro to add liquidity instead of absorbing it.' },
     { k: 'healthTh', label: 'Health-index alert level', min: 30, max: 80, step: 5, def: 60, help: 'A composite health index below this level puts pre-emptive contracts on alert before any single indicator breaches.' },
-    { k: 'volTh', label: 'Volatility alert (× normal)', min: 1.1, max: 3, step: 0.1, def: 1.5, help: 'Recent market volatility as a multiple of its own longer-run level; above this the volatility buffer would be released.' },
+    { k: 'volTh', label: 'Volatility alert (× normal)', min: 1.1, max: 3, step: 0.1, def: 1.5, help: 'Volatility of the last 20 trading days as a multiple of its level over the preceding months of stored daily data; above this the volatility buffer would be released.' },
   ] },
   { id: 'markets', title: 'Commodities, assets and currencies', params: [
     { k: 'bandPct', label: 'Commodity price band (± %)', min: 10, max: 60, step: 5, def: 25, help: 'Half-width of the band around each commodity’s five-year average price in euro. Outside the band the stabilisation reserve would buy (below) or release (above).' },
@@ -20,28 +20,31 @@ export const PROG_GROUPS = [
     { k: 'bubbleReal', label: 'House-price signal: real growth (% a year)', min: 2, max: 15, step: 0.5, def: 6, help: 'House prices rising faster than this after inflation count as one of the three asset-price signals.' },
     { k: 'bubbleGap', label: 'House-price signal: gap from trend (%)', min: 3, max: 30, step: 1, def: 10, help: 'House prices above their own ten-year trend by more than this count as one of the three asset-price signals.' },
     { k: 'divertMax', label: 'Largest diversion offer (% of new investment)', min: 5, max: 30, step: 1, def: 20, help: 'Share of new investment in the overheated asset that would be offered conversion into stabilisation bonds when all three signals are on; one third of it per signal.' },
-    { k: 'devalTh', label: 'Depreciation trigger (% in 12 months)', min: 5, max: 40, step: 1, def: 15, help: 'A fall of a currency against the US dollar larger than this over twelve months opens its swap line and reserve-diversification programme.' },
-    { k: 'reserveMax', label: 'Largest reserve share in PHX (%)', min: 5, max: 40, step: 1, def: 20, help: 'Ceiling on the share of official reserves a central bank would hold in PHX under the diversification programme.' },
+    { k: 'devalTh', label: 'Depreciation trigger (% in 12 months)', min: 5, max: 40, step: 1, def: 15, help: 'A fall of a currency against the US dollar of at least this much over twelve months opens its swap line and reserve-diversification programme.' },
+    { k: 'reserveMax', label: 'Largest reserve share in PHX (%)', min: 5, max: 40, step: 1, def: 20, help: 'Ceiling on the share of official reserves a central bank would hold in PHX. The share is 5% in normal times, 10% when the trigger is met, and half a point more for each further point of depreciation.' },
   ] },
   { id: 'funds', title: 'Debt, stability fund and recall', params: [
     { k: 'swapShare', label: 'Share of debt eligible for conversion (%)', min: 5, max: 50, step: 5, def: 20, help: 'Share of a government’s debt offered for exchange into PHX-denominated bonds.' },
-    { k: 'swapFee', label: 'Margin over the reference yield (pp)', min: 0, max: 1.5, step: 0.05, def: 0.25, help: 'The PHX bond pays the lowest euro-area ten-year yield plus this margin, which covers the issuer’s costs and risk.' },
+    { k: 'swapFee', label: 'Margin over the reference yield (pp)', min: 0, max: 1.5, step: 0.05, def: 0.25, help: 'The PHX bond pays the euro-area reference yield (Germany’s 10-year yield, measured like the national yields it is compared with; failing that the ECB’s 10-year AAA yield) plus this margin, which covers the issuer’s costs and risk.' },
     { k: 'swapMaturity', label: 'Average maturity of the debt (years)', min: 3, max: 15, step: 1, def: 8, help: 'Debt is exchanged only as it falls due, so about one part in this many is converted each year.' },
     { k: 'gdpLink', label: 'Growth link of repayments', min: 0, max: 1, step: 0.05, def: 0.25, help: 'How strongly scheduled repayments move with growth: each point of growth below potential lowers the year’s repayment by this share, and conversely, within 50–150%.' },
     { k: 'fundSize', label: 'Stability fund (€ billion)', min: 5, max: 500, step: 5, def: 50, help: 'Size of the fund distributed among economies with measured need.' },
     { k: 'fundUGap', label: 'Unemployment disparity trigger (pp)', min: 0.5, max: 8, step: 0.5, def: 2, help: 'An economy becomes eligible when its unemployment rate exceeds the area average by more than this.' },
+    { k: 'fundXGap', label: 'Output-gap disparity trigger (pp)', min: 0.5, max: 6, step: 0.5, def: 1.5, help: 'An economy also becomes eligible when its output gap is below the area average by more than this.' },
     { k: 'fundFirst', label: 'First tranche (%)', min: 10, max: 100, step: 5, def: 40, help: 'Share of an allocation paid at once; the rest is paid as agreed milestones are met.' },
     { k: 'recallTh', label: 'Recall trigger (inflation, %)', min: 3, max: 8, step: 0.25, def: 4, help: 'Area inflation at which PHX in circulation starts to be recalled.' },
     { k: 'recallBase', label: 'Recall at the trigger (% of PHX)', min: 0.5, max: 10, step: 0.5, def: 2, help: 'Share of PHX in circulation recalled when inflation is exactly at the recall trigger.' },
     { k: 'recallSlope', label: 'Extra recall per point above (% of PHX)', min: 0, max: 5, step: 0.25, def: 1, help: 'Additional share recalled for each percentage point of inflation above the recall trigger, so a small breach gives a small recall.' },
     { k: 'recallMax', label: 'Largest recall (% of PHX)', min: 2, max: 30, step: 1, def: 10, help: 'Ceiling on the share of PHX recalled in one step.' },
-    { k: 'themeSize', label: 'Each thematic fund (€ billion)', min: 1, max: 100, step: 1, def: 10, help: 'Size of each thematic fund; it is shared among the eligible economies in proportion to their measured gap and their size.' },
+    { k: 'themeSize', label: 'Each thematic fund (€ billion)', min: 1, max: 100, step: 1, def: 10, help: 'Size of each thematic fund; it is shared among the eligible economies in proportion to their measured gap and their size, and what the cap below leaves undrawn stays in the fund.' },
+    { k: 'themeCap', label: 'Largest allocation (% of the economy’s GDP)', min: 0.1, max: 5, step: 0.1, def: 1, help: 'No economy receives more than this share of its own GDP from one thematic fund or from the stability fund, so a small economy just past a benchmark cannot take most of a fund.' },
     { k: 'dragonCap', label: 'Dragon reserve cap (% of PHX a year)', min: 0, max: 20, step: 1, def: 5, help: 'Largest share of PHX in circulation that may be converted into the Dragon reserve in a year, so that the reserve stays scarce.' },
   ] },
 ];
 export const PROG_INDEX = Object.fromEntries(PROG_GROUPS.flatMap(g => g.params.map(p => [p.k, p])));
 export const PROG_DEFAULTS = Object.fromEntries(PROG_GROUPS.flatMap(g => g.params.map(p => [p.k, p.def])));
-export function sanitizeProg(s = {}) {
+export function sanitizeProg(s) {
+  s = s && typeof s === 'object' ? s : {};
   const out = { ...PROG_DEFAULTS };
   for (const [k, m] of Object.entries(PROG_INDEX)) if (typeof s[k] === 'number' && Number.isFinite(s[k])) out[k] = Math.min(m.max, Math.max(m.min, s[k]));
   return out;
@@ -51,18 +54,24 @@ const last = r => (r && r.length ? r[r.length - 1] : null);
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 const mean = a => (a.length ? a.reduce((s, v) => s + v, 0) / a.length : null);
 const sd = a => { if (a.length < 2) return null; const m = mean(a); return Math.sqrt(a.reduce((s, v) => s + (v - m) ** 2, 0) / (a.length - 1)); };
+// Unemployment above its natural rate (the natural rate is already on the same definition as the current rate).
+export const uGapOf = c => (c.unemp == null ? null : c.unemp - (c.uBar ?? c.unemp));
+// Observation twelve months before the last one of a monthly [period, value] series, by date rather than
+// by position, so a gap in the series cannot shift the comparison.
+const monthsBack = (p, n) => { const y = +p.slice(0, 4), m = +p.slice(5, 7) - 1 - n, yy = y + Math.floor(m / 12), mm = ((m % 12) + 12) % 12; return `${yy}-${String(mm + 1).padStart(2, '0')}`; };
+const yearAgo = rows => { const l = last(rows); if (!l) return null; const key = monthsBack(l[0], 12); return rows.find(r => r[0] === key) || null; };
 const wmean = (cells, f) => { let w = 0, s = 0; for (const c of cells) { const v = f(c); if (v == null || !Number.isFinite(v)) continue; w += c.gdp; s += v * c.gdp; } return w ? s / w : null; };
 
 // ---- 1. Trigger board: inflation confirmed by independent monetary indicators ----------------------
-// A conversion fires on inflation only when a money or credit aggregate from a second publisher agrees,
-// which keeps a single noisy release from triggering it.
+// A second layer of confirmation beside the core contracts: the inflation signal counts as confirmed only
+// when a money or credit aggregate from a second publisher agrees. Without monetary data it stays unconfirmed.
 export function triggerBoard(data, cells, P, S) {
   const pi = wmean(cells, c => c.pi);
   const m = data.money || {};
   const ind = (k, label, row, th, source, unit = '%') => ({ k, label, value: row ? row[1] : null, period: row ? row[0] : null, threshold: th, breach: row ? row[1] >= th : null, source, unit });
-  const cashYoy = (() => { const r = m.cash || []; if (r.length < 13) return null; return [last(r)[0], (last(r)[1] / r[r.length - 13][1] - 1) * 100]; })();
+  const cashYoy = (() => { const r = m.cash || [], b = yearAgo(r); return b && b[1] > 0 ? [last(r)[0], (last(r)[1] / b[1] - 1) * 100] : null; })();
   const rows = [
-    { k: 'pi', label: 'Inflation, GDP-weighted', value: pi, period: cells.map(c => c.piPeriod).sort().pop() || null, threshold: P.piTh, breach: pi == null ? null : pi >= P.piTh, source: 'Eurostat / IMF', unit: '%' },
+    { k: 'pi', label: 'Inflation, GDP-weighted (official month; nowcast where enabled)', value: pi, period: cells.map(c => c.piPeriod).sort().pop() || null, threshold: P.piTh, breach: pi == null ? null : pi >= P.piTh, source: 'Eurostat / IMF', unit: '%' },
     ind('m3', 'Broad money M3, annual growth', last(m.m3), S.m3Th, 'ECB'),
     ind('m1', 'Narrow money M1, annual growth', last(m.m1), S.m3Th, 'ECB'),
     ind('hhLoans', 'Loans to households, annual growth', last(m.hhLoans), S.creditTh, 'ECB'),
@@ -74,14 +83,14 @@ export function triggerBoard(data, cells, P, S) {
   const below = cells.filter(c => c.pi < S.deflTh);
   let state = 'CLEAR';
   if (rows[0].breach && monetary >= 1) state = 'CONFIRMED';
-  else if (rows[0].breach) state = known ? 'UNCONFIRMED' : 'CONFIRMED';
+  else if (rows[0].breach) state = 'UNCONFIRMED';
   else if (monetary >= 2) state = 'MONETARY';
   else if (pi != null && pi < S.deflTh) state = 'INJECT';
   return { rows, state, monetary, known, pi, below };
 }
 export const TRIGGER_STATES = {
-  CONFIRMED: { tone: 'crit', label: 'Confirmed', desc: 'Inflation is above the trigger and at least one money or credit aggregate agrees: conversions proceed.' },
-  UNCONFIRMED: { tone: 'serious', label: 'Unconfirmed', desc: 'Inflation is above the trigger but no money or credit aggregate agrees: contracts stay armed and conversions wait for confirmation.' },
+  CONFIRMED: { tone: 'crit', label: 'Confirmed', desc: 'Inflation is above the trigger and at least one money or credit aggregate agrees: prices and money point the same way.' },
+  UNCONFIRMED: { tone: 'serious', label: 'Unconfirmed', desc: 'Inflation is above the trigger but no money or credit aggregate agrees: the signal comes from prices alone, not from money growth.' },
   MONETARY: { tone: 'warn', label: 'Monetary signal', desc: 'Two or more money or credit aggregates are above their triggers while inflation is not: an early signal, monitored.' },
   INJECT: { tone: 'info', label: 'Inject', desc: 'Inflation is below the deflation floor: PHX would be converted back into Digital Euro to add liquidity.' },
   CLEAR: { tone: 'good', label: 'Clear', desc: 'No trigger condition is met.' },
@@ -105,11 +114,13 @@ export function volatilityIndex(data, S, short = 20) {
   ];
   const parts = [];
   for (const d of defs) {
-    const n = (d.rows || []).length;
-    if (n < short + 30) continue;
-    const now = realisedVol(d.rows, short, d.diff), norm = realisedVol(d.rows, n - 1, d.diff);
+    const rows = (d.rows || []).filter(r => r[1] != null);
+    const n = rows.length;
+    if (n < short + 40) continue;
+    // Normal = the stored days before the recent window, so a burst does not raise its own yardstick.
+    const now = realisedVol(rows, short, d.diff), norm = realisedVol(rows.slice(0, n - short), n - short - 1, d.diff);
     if (now == null || !norm) continue;
-    parts.push({ k: d.k, label: d.label, now, norm, ratio: now / norm, unit: d.unit, days: n, asOf: last(d.rows)[0] });
+    parts.push({ k: d.k, label: d.label, now, norm, ratio: now / norm, unit: d.unit, days: n - short, from: rows[0][0], asOf: last(rows)[0] });
   }
   const index = parts.length ? mean(parts.map(p => p.ratio)) : null;
   return { parts, index, state: index == null ? 'NA' : index >= S.volTh ? 'RELEASE' : index >= (1 + S.volTh) / 2 ? 'WATCH' : 'CALM' };
@@ -122,7 +133,7 @@ export function healthIndex(cells, P, S, vol) {
   const parts = [
     comp('pi', 'Inflation away from target', wmean(cells, c => Math.abs(c.pi - (c.anchor ?? P.target))), 4, 'pp'),
     comp('gap', 'Output gap', wmean(cells, c => Math.abs(c.x0 ?? 0)), 4, '%'),
-    comp('u', 'Unemployment above its natural rate', wmean(cells, c => Math.max(0, (c.unemp ?? 0) - (c.uBar ?? c.unemp ?? 0))), 4, 'pp'),
+    comp('u', 'Unemployment above its natural rate', wmean(cells, c => Math.max(0, uGapOf(c) ?? 0)), 4, 'pp'),
     comp('fiscal', 'Government deficit', wmean(cells, c => Math.max(0, -(c.govPct ?? 0))), 6, '% of GDP'),
     comp('vol', 'Market volatility above normal', vol?.index == null ? null : Math.max(0, vol.index - 1), 1, '×'),
   ].filter(p => p.stress !== null);
@@ -130,8 +141,9 @@ export function healthIndex(cells, P, S, vol) {
   const index = 100 * (1 - mean(parts.map(p => p.stress)));
   return { parts, index, state: index < S.healthTh ? 'ALERT' : index < S.healthTh + 15 ? 'WATCH' : 'STABLE' };
 }
-// The same index for one economy, used to rank where pre-emptive contracts would be prepared first.
-export const healthOf = (c, P) => 100 * (1 - mean([clamp(Math.abs(c.pi - (c.anchor ?? P.target)) / 4, 0, 1), clamp(Math.abs(c.x0 ?? 0) / 4, 0, 1), clamp(Math.max(0, (c.unemp ?? 0) - (c.uBar ?? c.unemp ?? 0)) / 4, 0, 1), clamp(Math.max(0, -(c.govPct ?? 0)) / 6, 0, 1)]));
+// The four economy-level components for one economy (market volatility is common to all), used to rank
+// where pre-emptive contracts would be prepared first.
+export const healthOf = (c, P) => 100 * (1 - mean([clamp(Math.abs(c.pi - (c.anchor ?? P.target)) / 4, 0, 1), clamp(Math.abs(c.x0 ?? 0) / 4, 0, 1), clamp(Math.max(0, uGapOf(c) ?? 0) / 4, 0, 1), clamp(Math.max(0, -(c.govPct ?? 0)) / 6, 0, 1)]));
 
 // ---- 4. Hard cash: currency in circulation against its pre-2020 trend ---------------------------------
 export function cashExcess(data) {
@@ -145,8 +157,8 @@ export function cashExcess(data) {
   const b = xs.reduce((s, x, i) => s + (x - mx) * (ys[i] - my), 0) / xs.reduce((s, x) => s + (x - mx) ** 2, 0), a = my - b * mx;
   const trendAt = i => Math.exp(a + b * (i - t0));
   const path = r.slice(t0).map((x, i) => [x[0], x[1] / 1000, trendAt(t0 + i) / 1000]);
-  const [period, stock] = last(r), trend = trendAt(r.length - 1);
-  return { period, stock: stock / 1000, trend: trend / 1000, excess: (stock - trend) / 1000, yoy: (stock / r[r.length - 13][1] - 1) * 100, trendGrowth: (Math.exp(12 * b) - 1) * 100, path };
+  const [period, stock] = last(r), trend = trendAt(r.length - 1), ago = yearAgo(r);
+  return { period, stock: stock / 1000, trend: trend / 1000, excess: (stock - trend) / 1000, yoy: ago ? (stock / ago[1] - 1) * 100 : null, trendGrowth: (Math.exp(12 * b) - 1) * 100, path };
 }
 // Tiered conversion reward: larger amounts moved out of cash earn a higher premium, in basis points.
 export const CASH_TIERS = [{ upTo: 1000, bp: 10 }, { upTo: 10000, bp: 20 }, { upTo: 100000, bp: 35 }, { upTo: Infinity, bp: 50 }];
@@ -161,26 +173,27 @@ const OTHER_W = { gold: 1 / 3, wheat: 0.25, maize: 1 / 6, copper: 0.25 };
 export function basketWeights(S, keys) {
   const e = keys.includes('brent') ? S.wEnergy / 100 : 0;
   const rest = keys.filter(k => k !== 'brent'), tot = rest.reduce((s, k) => s + (OTHER_W[k] || 0), 0) || 1;
-  const w = Object.fromEntries(rest.map(k => [k, (1 - e) * (OTHER_W[k] || 0) / tot]));
-  if (e) w.brent = rest.length ? e : 1;
+  const w = Object.fromEntries(rest.map(k => [k, (rest.length === keys.length ? 1 : 1 - e) * (OTHER_W[k] || 0) / tot]));
+  if (keys.includes('brent')) w.brent = rest.length ? e : 1;
   return w;
 }
 export function commodityBasket(data, S, window = 60) {
   const src = data.commod;
   if (!src?.series) return null;
   const fx = new Map(src.eurPerUsd || []);
-  let lastFx = null;
   const items = [];
   for (const def of COMMODITIES) {
-    const usd = src.series[def.k];
-    if (!usd || usd.length < window + 13) continue;
-    // Prices in euro: the band and the basket are for euro-area buyers.
-    const eur = usd.map(([p, v]) => { if (fx.has(p)) lastFx = fx.get(p); return [p, lastFx ? v * lastFx : null]; }).filter(r => r[1] != null);
+    const usd = (src.series[def.k] || []).filter(r => r[1] > 0);
+    if (usd.length < window + 13) continue;
+    // Prices in euro per quoted unit (cent quotations divided by 100): the band and the basket are for
+    // euro-area buyers. A month without an exchange rate takes the latest earlier one.
+    let lastFx = null;
+    const eur = usd.map(([p, v]) => { if (fx.has(p)) lastFx = fx.get(p); return [p, lastFx ? v * lastFx / (def.per || 1) : null]; }).filter(r => r[1] != null);
     if (eur.length < window + 13) continue;
     const win = eur.slice(-window).map(r => r[1]);
     const avg = mean(win), lower = avg * (1 - S.bandPct / 100), upper = avg * (1 + S.bandPct / 100);
-    const [period, price] = last(eur), priceUsd = last(usd)[1];
-    const yoy = (price / eur[eur.length - 13][1] - 1) * 100;
+    const [period, price] = last(eur), priceUsd = last(usd)[1], ago = yearAgo(eur);
+    const yoy = ago ? (price / ago[1] - 1) * 100 : null;
     const ret = []; for (let i = eur.length - 36; i < eur.length; i++) if (i > 0) ret.push(Math.log(eur[i][1] / eur[i - 1][1]));
     const dev = (price / avg - 1) * 100;
     const state = price > upper ? 'ABOVE' : price < lower ? 'BELOW' : Math.abs(dev) > 0.8 * S.bandPct ? 'NEAR' : 'INSIDE';
@@ -192,10 +205,11 @@ export function commodityBasket(data, S, window = 60) {
   const w = basketWeights(S, items.map(i => i.k));
   // Geometric index, 100 = each commodity at its own five-year average; common months only.
   const months = items.map(i => new Set(i.eur.map(r => r[0]))).reduce((a, b) => new Set([...a].filter(x => b.has(x))));
-  const idx = [...months].sort().map(p => [p, 100 * Math.exp(items.reduce((s, it) => s + w[it.k] * Math.log(it.eur.find(r => r[0] === p)[1] / it.avg), 0))]);
+  const byMonth = Object.fromEntries(items.map(it => [it.k, new Map(it.eur)]));
+  const idx = [...months].sort().map(p => [p, 100 * Math.exp(items.reduce((s, it) => s + (w[it.k] || 0) * Math.log(byMonth[it.k].get(p) / it.avg), 0))]);
   const iret = []; for (let i = Math.max(1, idx.length - 36); i < idx.length; i++) iret.push(Math.log(idx[i][1] / idx[i - 1][1]));
-  const vol = (sd(iret) ?? 0) * Math.sqrt(12) * 100, avgVol = items.reduce((s, it) => s + w[it.k] * it.vol, 0);
-  const now = last(idx), y1 = idx[idx.length - 13];
+  const vol = (sd(iret) ?? 0) * Math.sqrt(12) * 100, avgVol = items.reduce((s, it) => s + (w[it.k] || 0) * it.vol, 0);
+  const now = last(idx), y1 = yearAgo(idx);
   return { items, weights: w, index: idx, level: now[1], period: now[0], yoy: y1 ? (now[1] / y1[1] - 1) * 100 : null, vol, avgVol,
     // A credit of 100 issued twelve months ago and linked to the basket is worth this today.
     credit: y1 ? 100 * now[1] / y1[1] : null };
@@ -221,7 +235,7 @@ export function bubbleMonitor(data, cells, S) {
     const [quarter, nominal] = last(rch);
     const real = nominal - (c.piOfficial ?? c.pi);
     let gap = null;
-    if (idx && idx.length >= 24) {
+    if (idx && idx.length >= 24 && idx.slice(-40).every(r => r[1] > 0)) {
       const win = idx.slice(-40), xs = win.map((_, i) => i), ys = win.map(r => Math.log(r[1]));
       const mx = mean(xs), my = mean(ys), b = xs.reduce((s, x, i) => s + (x - mx) * (ys[i] - my), 0) / xs.reduce((s, x) => s + (x - mx) ** 2, 0);
       gap = (Math.exp(ys[ys.length - 1] - (my + b * (xs.length - 1 - mx))) - 1) * 100;
@@ -248,20 +262,24 @@ export function devaluationMonitor(data, S, names = {}) {
   const usd = new Map(r.USD);
   const rows = [];
   for (const [ccy, eurRows] of Object.entries(r)) {
-    if (eurRows.length < 60) continue;
     // Units of the currency per euro; per dollar = per euro / dollars per euro.
-    const perUsd = ccy === 'USD' ? null : eurRows.filter(x => usd.has(x[0])).map(x => [x[0], x[1] / usd.get(x[0])]);
-    const base = ccy === 'USD' ? eurRows : perUsd;
-    const first = mean(base.slice(0, 10).map(x => x[1])), now = mean(base.slice(-5).map(x => x[1]));
+    const pos = eurRows.filter(x => x[1] > 0);
+    const base = ccy === 'USD' ? pos : pos.filter(x => usd.get(x[0]) > 0).map(x => [x[0], x[1] / usd.get(x[0])]);
+    if (base.length < 60) continue;
+    // Twelve months: the five trading days to date against the five ending a year before the last one.
+    const cutoff = new Date(Date.parse(last(base)[0]) - 365 * 864e5).toISOString().slice(0, 10);
+    const then = rows => { const i = rows.findIndex(x => x[0] > cutoff); return i < 1 ? null : mean(rows.slice(Math.max(0, i - 5), i).map(x => x[1])); };
+    const first = then(base), eFirst = then(pos);
+    if (!first || !eFirst) continue;
+    const now = mean(base.slice(-5).map(x => x[1])), eNow = mean(pos.slice(-5).map(x => x[1]));
     // A rise in units per dollar (or per euro, for the dollar itself) is a depreciation.
-    const dep = (1 - first / now) * 100;
-    const eFirst = mean(eurRows.slice(0, 10).map(x => x[1])), eNow = mean(eurRows.slice(-5).map(x => x[1]));
-    const depEur = (1 - eFirst / eNow) * 100;
+    const dep = (1 - first / now) * 100, depEur = (1 - eFirst / eNow) * 100;
     const vol = realisedVol(base, 30);
     const trig = dep >= S.devalTh;
-    // Reserve share: 5% in normal times, rising by half a point per point of depreciation beyond the trigger.
-    const share = clamp(5 + (trig ? 0.5 * (dep - S.devalTh) + 5 : 0), 0, S.reserveMax);
-    rows.push({ ccy, name: names[ccy] || ccy, against: ccy === 'USD' ? 'EUR' : 'USD', dep, depEur, vol, state: trig ? 'SWAP' : dep >= 0.6 * S.devalTh ? 'WATCH' : 'STABLE', share, from: base[0][0], to: last(base)[0], path: base.filter((_, i) => i % 5 === 0 || i === base.length - 1).map(x => [x[0], (x[1] / first) * 100]) });
+    // Reserve share: 5% in normal times; 10% once the trigger is met, plus half a point for each further
+    // point of depreciation, up to the ceiling.
+    const share = Math.min(S.reserveMax, trig ? 10 + 0.5 * (dep - S.devalTh) : 5);
+    rows.push({ ccy, name: names[ccy] || ccy, against: ccy === 'USD' ? 'EUR' : 'USD', dep, depEur, vol, state: trig ? 'SWAP' : dep >= 0.6 * S.devalTh ? 'WATCH' : 'STABLE', share, from: cutoff, to: last(base)[0] });
   }
   rows.sort((a, b) => b.dep - a.dep);
   return { rows, asOf: last(r.USD)[0] };
@@ -273,7 +291,7 @@ export const FX_STATES = {
 };
 
 // ---- 8. Debt conversion into PHX bonds ----------------------------------------------------------------
-// The PHX bond pays the lowest euro-area ten-year yield plus a margin. The saving is the yield difference
+// The PHX bond pays the euro-area reference yield plus a margin. The saving is the yield difference
 // on the converted share, and reaches its full value only once the whole share has fallen due.
 export function debtSwap(data, cells, S) {
   const d = data.debt;
@@ -287,8 +305,13 @@ export function debtSwap(data, cells, S) {
     rows.push({ c, geo, yield: y[1], yieldPeriod: y[0], debtPct: dbt[1], debtPeriod: dbt[0], debt: dbt[1] / 100 * c.gdp });
   }
   if (!rows.length) return null;
-  const eaRows = rows.filter(r => r.c.ea);
-  const ref = Math.min(...(eaRows.length ? eaRows : rows).map(r => r.yield));
+  // Reference: Germany's 10-year yield from the same dataset, so that it is measured the same way and in
+  // the same month as the yields it is compared with; failing that the ECB's 10-year AAA euro-area yield.
+  // It does not depend on the economies in view, and no thinly traded national quote can set it.
+  const de = last(d.yields.DE), aaa = last(data.markets?.y10);
+  const ref = de ? de[1] : aaa ? aaa[1] : null;
+  if (ref == null) return null;
+  const refSource = de ? `German 10-year yield, ${de[0]}` : `ECB 10-year AAA yield, ${aaa[0]}`;
   const rate = ref + S.swapFee;
   for (const r of rows) {
     r.spread = r.yield - ref;
@@ -302,7 +325,7 @@ export function debtSwap(data, cells, S) {
     r.payFactor = g == null ? 1 : clamp(1 + S.gdpLink * (g - (r.c.gPot ?? 1.5)), 0.5, 1.5);
   }
   rows.sort((a, b) => b.saving - a.saving);
-  return { rows, ref, rate, total: rows.reduce((s, r) => s + r.saving, 0), totalY1: rows.reduce((s, r) => s + r.savingY1, 0), converted: rows.reduce((s, r) => s + r.converted, 0) };
+  return { rows, ref, refSource, rate, total: rows.reduce((s, r) => s + r.saving, 0), totalY1: rows.reduce((s, r) => s + r.savingY1, 0), converted: rows.reduce((s, r) => s + r.converted, 0) };
 }
 
 // ---- 9. Stability fund: allocation by measured need, paid in tranches ---------------------------------
@@ -311,20 +334,22 @@ export function stabilityFund(cells, P, S) {
   const uAvg = wmean(cells, c => c.unemp), xAvg = wmean(cells, c => c.x0 ?? 0);
   const rows = cells.map(c => {
     const need = needIndex(c, c.pi, c.x0 ?? 0, P);
-    const uGap = c.unemp == null || uAvg == null ? null : c.unemp - uAvg;
-    const eligible = uGap != null && uGap > S.fundUGap || (c.x0 ?? 0) < xAvg - 1.5;
-    return { c, need, uGap, xGap: (c.x0 ?? 0) - xAvg, eligible, why: uGap != null && uGap > S.fundUGap ? 'unemployment' : (c.x0 ?? 0) < xAvg - 1.5 ? 'output gap' : null };
+    const uGap = c.unemp == null || uAvg == null ? null : c.unemp - uAvg, xGap = (c.x0 ?? 0) - xAvg;
+    const byU = uGap != null && uGap > S.fundUGap, byX = xGap < -S.fundXGap;
+    return { c, need, uGap, xGap, eligible: byU || byX, why: byU ? 'unemployment' : byX ? 'output gap' : null };
   });
   const el = rows.filter(r => r.eligible);
-  // Shares in proportion to need × economic size, so the support per unit of GDP rises with need.
+  // Shares in proportion to need × economic size, so the support per unit of GDP rises with need; no
+  // economy draws more than the cap on its own GDP, and what the cap leaves stays in the fund.
   const tot = el.reduce((s, r) => s + r.need * r.c.gdp, 0);
   for (const r of rows) {
-    r.alloc = r.eligible && tot ? S.fundSize * r.need * r.c.gdp / tot : 0;
+    r.alloc = r.eligible && tot ? Math.min(S.fundSize * r.need * r.c.gdp / tot, S.themeCap / 100 * r.c.gdp) : 0;
     r.first = r.alloc * S.fundFirst / 100;
     r.pctGdp = r.c.gdp ? r.alloc / r.c.gdp * 100 : 0;
   }
   rows.sort((a, b) => b.alloc - a.alloc || b.need - a.need);
-  return { rows, uAvg, xAvg, eligible: el.length, first: el.reduce((s, r) => s + r.first, 0) };
+  const drawn = el.reduce((s, r) => s + r.alloc, 0);
+  return { rows, uAvg, xAvg, eligible: el.length, drawn, undrawn: Math.max(0, S.fundSize - drawn), first: el.reduce((s, r) => s + r.first, 0) };
 }
 
 // ---- 10. Proportional recall and the conversion ladder ------------------------------------------------
@@ -340,7 +365,7 @@ export function recallLadder({ pi, phx, P, S, vol, health, m3 }) {
   const cash = shortage ? 0.2 * (amount - dragon) : 0;
   const digitalEuro = amount - dragon - cash;
   const rule = !breach ? 'No recall: inflation is below the recall trigger.'
-    : crisis ? 'Crisis: the Dragon reserve takes its capped share first.' : shortage ? 'Markets are short of liquidity: a fifth is paid out in cash.' : 'Normal: everything recalled becomes Digital Euro.';
+    : crisis ? 'Crisis: the Dragon reserve takes its capped share first.' : shortage ? 'Markets are short of liquidity: a fifth is paid out in cash.' : 'Normal: everything recalled returns to euro, as Digital Euro within its holding limit and bank deposits beyond it.';
   // Circulation weights of PHX and the euro (M3), which sum to 100.
   const wPhx = m3 && phx >= 0 ? 100 * phx / (phx + m3) : null;
   return { breach, share, amount, dragon, cash, digitalEuro, crisis, shortage, rule, wPhx, wEur: wPhx == null ? null : 100 - wPhx,
@@ -353,10 +378,10 @@ const med = a => { const v = a.filter(x => x != null && Number.isFinite(x)).sort
 const geoOf = c => c.euCode || (c.eu ? c.id : null);
 export const THEME_FUNDS = [
   { k: 'jobs', title: 'Employment and recovery fund', unit: 'pp', indicator: 'Unemployment above its natural rate', uses: 'Job creation, training and support for new firms where unemployment is above its natural rate.',
-    value: c => (c.unemp == null ? null : c.unemp - (c.uBar ?? c.unemp)), bench: () => 0.5, gap: (v, b) => Math.max(0, v - b), source: 'Eurostat / IMF' },
+    value: c => uGapOf(c), bench: () => 0.5, gap: (v, b) => Math.max(0, v - b), source: 'Eurostat / IMF' },
   { k: 'export', title: 'Export support fund', unit: '% of GDP', indicator: 'Current-account balance', uses: 'Export credit at the reference rate, export insurance and trade logistics for economies with an external deficit.',
     value: c => c.ca ?? null, bench: () => -1, gap: (v, b) => Math.max(0, b - v), source: 'IMF' },
-  { k: 'banks', title: 'Bank liquidity facility', unit: '%', indicator: 'Non-performing loans ratio', uses: 'Liquidity against collateral and a standing swap line for banking systems with weak loan books; drawn only in stress.',
+  { k: 'banks', title: 'Bank liquidity facility', unit: '%', indicator: 'Non-performing loans ratio', uses: 'Liquidity against collateral and a standing swap line for banking systems whose share of non-performing loans is more than one and a half times the median; drawn only in stress.',
     value: (c, d) => last(d.banks?.npl?.[geoOf(c)])?.[1] ?? null, bench: (vals) => { const m = med(vals); return m == null ? null : 1.5 * m; }, gap: (v, b) => Math.max(0, v - b), source: 'ECB banking supervision' },
   { k: 'ageing', title: 'Ageing and welfare fund', unit: 'per 100', indicator: 'Old-age dependency ratio', uses: 'Pensions, health and care services where people aged 65 and over are many relative to those of working age.',
     value: (c, d) => last(d.struct?.old?.[geoOf(c)])?.[1] ?? null, bench: vals => med(vals), gap: (v, b) => Math.max(0, v - b), source: 'Eurostat' },
@@ -373,14 +398,15 @@ export function themeFunds(data, cells, S) {
     const bench = f.bench(vals);
     const rows = cells.map((c, i) => ({ c, value: vals[i], gap: vals[i] == null || bench == null ? 0 : f.gap(vals[i], bench) })).filter(r => r.value != null);
     const tot = rows.reduce((s, r) => s + r.gap * r.c.gdp, 0);
-    for (const r of rows) { r.alloc = tot ? S.themeSize * r.gap * r.c.gdp / tot : 0; r.pctGdp = r.c.gdp ? r.alloc / r.c.gdp * 100 : 0; }
+    for (const r of rows) { r.alloc = tot ? Math.min(S.themeSize * r.gap * r.c.gdp / tot, S.themeCap / 100 * r.c.gdp) : 0; r.pctGdp = r.c.gdp ? r.alloc / r.c.gdp * 100 : 0; }
+    const drawn = rows.reduce((s, r) => s + r.alloc, 0);
     rows.sort((a, b) => b.alloc - a.alloc || b.gap - a.gap);
-    return { ...f, bench, rows, covered: rows.length, eligible: rows.filter(r => r.gap > 0).length };
+    return { ...f, bench, rows, covered: rows.length, eligible: rows.filter(r => r.gap > 0).length, drawn, undrawn: Math.max(0, S.themeSize - drawn) };
   });
 }
 
 // ---- 12. Where PHX above the wallets' capacity goes -------------------------------------------------
-// Excess PHX is locked into instruments rather than paid out in cash: time deposits, PHX bonds and the
+// An alternative to returning recalled PHX to euro: locking it into time deposits, PHX bonds and the
 // strategic investment fund (infrastructure, green technology, innovation), with the Dragon reserve capped.
 export const SINKS = [
   { k: 'deposits', label: 'Time deposits (12–36 months)', share: 0.3, note: 'Convertible into Digital Euro at maturity, with a premium for waiting.' },
@@ -392,10 +418,11 @@ export const SINKS = [
 export function saturationSinks(excess, phx, S, crisis = false) {
   const dragon = crisis ? Math.min(excess, phx * S.dragonCap / 100) : 0;
   const rest = Math.max(0, excess - dragon);
-  return { excess, dragon, rows: [...SINKS.map(k => ({ ...k, amount: rest * k.share })), { k: 'dragon', label: 'Dragon reserve', share: excess ? dragon / excess : 0, amount: dragon, note: crisis ? 'Crisis: capped share of PHX in circulation.' : 'Closed outside a crisis.' }] };
+  return { excess, dragon, rows: [...SINKS.map(k => ({ ...k, share: excess ? rest * k.share / excess : k.share, amount: rest * k.share })), { k: 'dragon', label: 'Dragon reserve', share: excess ? dragon / excess : 0, amount: dragon, note: crisis ? 'Crisis: capped share of PHX in circulation.' : 'Closed outside a crisis.' }] };
 }
 
-// ---- 13. Currency credits: what 100 placed twelve months ago is worth today, by type ------------------
+// ---- 13. Currency credits: what 100 placed today is worth in twelve months at today's rates, by type
+// (the commodity-linked credit has no fixed rate: its line shows the last twelve months instead) ------------------
 export function creditTypes(data, cells, basket) {
   const pi = wmean(cells, c => c.piOfficial ?? c.pi);
   const y10 = last(data.markets?.y10)?.[1] ?? null, estr = last(data.markets?.estr)?.[1] ?? null;

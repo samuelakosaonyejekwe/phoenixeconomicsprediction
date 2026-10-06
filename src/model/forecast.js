@@ -128,7 +128,7 @@ export function forecastCell(cell, P, H = 12) {
 
 // Diebold–Mariano test of equal squared-error loss with a Newey–West variance (h − 1 lags) and the
 // Harvey–Leybourne–Newbold small-sample correction,
-// computed per series and pooled; returns the statistic and a two-sided normal p-value.
+// computed per series and pooled; returns the statistic and its two-sided p-value from Student's t.
 export function dieboldMariano(dSeries, h) {
   let num = 0, varSum = 0, n = 0;
   for (const d of dSeries) {

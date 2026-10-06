@@ -1,5 +1,5 @@
 // Dependency-free SVG/HTML charts: line (with bands and crosshair), stacked bars,
-// heat matrix, tile map, dot map, sparkline and meter. Every chart has a table view.
+// heat matrix, tile map, dot map, sparkline and meter. Charts of series and bars offer a table view.
 import { h, s, clear, showTip, hideTip, num } from './dom.js';
 
 export const SERIES = ['var(--s1)', 'var(--s2)', 'var(--s3)', 'var(--s4)', 'var(--s5)', 'var(--s6)', 'var(--s7)', 'var(--s8)'];
@@ -26,7 +26,10 @@ export const inkOn = c => {
   let r, g, b;
   if (/^#[0-9a-f]{6}$/i.test(c)) [r, g, b] = hex(c);
   else { const m = c.match(/\d+/g); if (!m) return '#0b0b0b'; [r, g, b] = m.map(Number); }
-  return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255 > 0.55 ? '#0b0b0b' : '#ffffff';
+  // Whichever of near-black and white has the higher contrast ratio against the colour (WCAG 2 relative luminance).
+  const lin = v => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; };
+  const L = 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+  return (L + 0.05) / 0.053 >= 1.05 / (L + 0.05) ? '#0b0b0b' : '#ffffff';
 };
 
 function niceTicks(min, max, n = 5) {
@@ -35,7 +38,7 @@ function niceTicks(min, max, n = 5) {
   const span = max - min, step0 = span / n, mag = 10 ** Math.floor(Math.log10(step0));
   const step = [1, 2, 2.5, 5, 10].map(m => m * mag).find(x => span / x <= n) || mag * 10;
   const out = [];
-  for (let v = Math.floor(min / step) * step; v <= max + step * 0.5; v += step) out.push(+v.toFixed(10));
+  for (let v = Math.floor(min / step) * step; v <= max + step * 0.5; v += step) out.push(+v.toPrecision(12));
   return out;
 }
 
@@ -60,7 +63,8 @@ export function card({ title, sub, legend, body, table, actions, cls }) {
   const bodyHost = h('div', { class: 'card-body' }, body);
   return h('section', { class: ['card', cls] },
     h('header', { class: 'card-h' },
-      h('div', null, h('h3', null, title), sub ? h('p', { class: 'sub' }, sub) : null),
+      // Card titles follow the page heading directly: they are second-level headings to assistive technology.
+      h('div', null, h('h3', { 'aria-level': 2 }, title), sub ? h('p', { class: 'sub' }, sub) : null),
       h('div', { class: 'card-a' }, actions, btn)),
     legend ? legendEl(legend) : null, bodyHost, tableHost);
 }
@@ -84,8 +88,10 @@ export function lineChart({ series, bands = [], height = 220, yFmt = v => num(v,
   const xs = [...new Set(all.map(v => v[0]))].sort((a, b) => a - b);
   const ys = [...all.map(v => v[1]), ...bands.flatMap(b => b.values.flatMap(v => [v[1], v[2]])), ...refs.map(r => r.y)].filter(Number.isFinite);
   let lo = yMin ?? Math.min(...ys), hi = yMax ?? Math.max(...ys);
-  if (lo === hi) { lo -= 1; hi += 1; }
+  // A flat series gets room above it only when it is not negative, so a quantity that cannot be
+  // negative is never drawn on a negative axis.
   const nonNeg = lo >= 0;
+  if (lo === hi) { const span = Math.abs(lo) || 1; hi += span; if (!nonNeg) lo -= span; }
   const pad = (hi - lo) * 0.08; if (yMin === undefined) lo = nonNeg ? Math.max(0, lo - pad) : lo - pad; if (yMax === undefined) hi += pad;
   const ticks = niceTicks(lo, hi, 4);
   lo = nonNeg && yMin === undefined ? Math.max(0, Math.min(lo, ticks[0])) : Math.min(lo, ticks[0]); hi = Math.max(hi, ticks[ticks.length - 1]);
@@ -93,17 +99,20 @@ export function lineChart({ series, bands = [], height = 220, yFmt = v => num(v,
 
   onResize(host, W => {
     clear(host);
-    const m = { l: 46, r: 12, t: 10, b: xLabel ? 36 : 24 }, H = height;
+    const m = { l: 46, r: 12, t: 10, b: 24 }, H = height;
     const X = v => m.l + (v - x0) / (x1 - x0) * (W - m.l - m.r);
     const Y = v => m.t + (1 - (v - lo) / (hi - lo)) * (H - m.t - m.b);
     const svg = s('svg', { width: W, height: H, viewBox: `0 0 ${W} ${H}`, class: 'svg' });
+    // A label is printed once: where rounding gives two ticks the same text, the second is left blank.
+    let lastLabel = null;
     for (const t of ticks) {
+      const label = yFmt(t);
       svg.append(s('line', { x1: m.l, x2: W - m.r, y1: Y(t), y2: Y(t), class: 'grid' }));
-      svg.append(s('text', { x: m.l - 6, y: Y(t) + 4, class: 'tick', 'text-anchor': 'end' }, yFmt(t)));
+      svg.append(s('text', { x: m.l - 6, y: Y(t) + 4, class: 'tick', 'text-anchor': 'end' }, label === lastLabel ? '' : label));
+      lastLabel = label;
     }
     const xt = niceTicks(x0, x1, Math.max(2, Math.floor((W - m.l) / 70)));
     for (const t of xt) if (t >= x0 && t <= x1) svg.append(s('text', { x: X(t), y: H - m.b + 16, class: 'tick', 'text-anchor': 'middle' }, xFmt(t)));
-    if (xLabel) svg.append(s('text', { x: (W + m.l) / 2, y: H - 4, class: 'tick', 'text-anchor': 'middle' }, xLabel));
     for (const b of bands) {
       const top = b.values.map(v => `${X(v[0])},${Y(v[2])}`), bot = b.values.slice().reverse().map(v => `${X(v[0])},${Y(v[1])}`);
       svg.append(s('polygon', { points: [...top, ...bot].join(' '), style: { fill: b.color, opacity: b.opacity ?? 0.14 } }));
@@ -159,6 +168,8 @@ export function lineChart({ series, bands = [], height = 220, yFmt = v => num(v,
     host.onblur = leave;
     svg.append(hit);
     host.append(svg);
+    // The axis caption is ordinary text below the plot, so a long one wraps instead of being cut off.
+    if (xLabel) host.append(h('p', { class: 'chart-cap' }, xLabel));
   });
   return host;
 }
@@ -183,8 +194,28 @@ export function stackedBars({ rows, fmt, max, markerLabel }) {
 
 // Matrix heatmap with diverging colour (e.g. the ACK kernel K(x, y)).
 export function heatMatrix({ matrix, labels, fmt = v => num(v, 3), title = '' }) {
-  const host = h('div', { class: 'chart' });
+  // One tab stop for the whole matrix; the arrow keys move from cell to cell and read out each value.
+  const host = h('div', { class: 'chart', tabindex: 0, role: 'group', 'aria-label': `${title ? `${title}: ` : ''}matrix of ${labels.length} by ${labels.length}; use the arrow keys to read each cell` });
+  const live = h('span', { class: 'sr-only', role: 'status', 'aria-live': 'polite' });
   const max = Math.max(1e-12, ...matrix.flat().map(Math.abs));
+  let rects = [], at = [0, 0];
+  const read = () => {
+    const r = rects[at[0]]?.[at[1]]; if (!r) return;
+    for (const row of rects) for (const c of row) c.classList.remove('kb');
+    r.classList.add('kb');
+    const b = r.getBoundingClientRect(), text = `${labels[at[0]]} → ${labels[at[1]]}`;
+    showTip(b.right, b.bottom, [{ value: fmt(matrix[at[0]][at[1]]), label: text }], title);
+    live.textContent = `${text}: ${fmt(matrix[at[0]][at[1]])}`;
+  };
+  host.addEventListener('keydown', e => {
+    const d = { ArrowUp: [-1, 0], ArrowDown: [1, 0], ArrowLeft: [0, -1], ArrowRight: [0, 1] }[e.key];
+    if (!d) return;
+    e.preventDefault();
+    at = [Math.min(labels.length - 1, Math.max(0, at[0] + d[0])), Math.min(labels.length - 1, Math.max(0, at[1] + d[1]))];
+    read();
+  });
+  host.addEventListener('focus', read);
+  host.addEventListener('blur', () => { hideTip(); for (const row of rects) for (const c of row) c.classList.remove('kb'); });
   onResize(host, W => {
     clear(host);
     const n = labels.length, lab = 30, cell = Math.max(6, Math.min(26, (W - lab - 4) / n));
@@ -192,15 +223,18 @@ export function heatMatrix({ matrix, labels, fmt = v => num(v, 3), title = '' })
     const svg = s('svg', { width: size, height: size, class: 'svg' });
     labels.forEach((l, i) => {
       svg.append(s('text', { x: lab - 4, y: lab + cell * i + cell / 2 + 3, class: 'tick', 'text-anchor': 'end' }, l));
-      svg.append(s('text', { x: lab + cell * i + cell / 2, y: lab - 6, class: 'tick', 'text-anchor': 'middle' }, cell >= 14 ? l : ''));
+      // Column labels only where they fit beside each other; every cell names its pair on hover.
+      svg.append(s('text', { x: lab + cell * i + cell / 2, y: lab - 6, class: 'tick', 'text-anchor': 'middle' }, cell >= 7 * String(l).length + 2 ? l : ''));
     });
+    rects = matrix.map(() => []);
     matrix.forEach((row, i) => row.forEach((v, j) => {
       const r = s('rect', { x: lab + cell * j + 1, y: lab + cell * i + 1, width: cell - 2, height: cell - 2, rx: 2, style: { fill: divColor(v, max) }, class: 'cell' });
       r.addEventListener('pointermove', e => showTip(e.clientX, e.clientY, [{ value: fmt(v), label: `${labels[i]} → ${labels[j]}` }], title));
       r.addEventListener('pointerleave', hideTip);
+      rects[i][j] = r;
       svg.append(r);
     }));
-    host.append(svg);
+    host.append(svg, live);
   });
   return host;
 }
@@ -211,8 +245,9 @@ export function tileMap({ cells, value, color, fmt, onSelect, selected, label = 
   return h('div', { class: 'tiles', style: { gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`, gridTemplateRows: `repeat(${rows}, auto)` } },
     cells.map(c => {
       const v = value(c), bg = color(v, c);
-      const b = h('button', { class: ['tile', selected === c.id && 'sel'], type: 'button', style: { gridColumn: c.col + 1, gridRow: c.row + 1, background: bg, color: inkOn(bg) }, 'aria-label': `${c.name}: ${fmt(v)}`, onclick: () => onSelect?.(c) },
-        h('b', null, label(c)), h('small', null, fmt(v)));
+      const b = h('button', { class: ['tile', selected === c.id && 'sel'], type: 'button', style: { gridColumn: c.col + 1, gridRow: c.row + 1, background: bg, color: inkOn(bg) }, onclick: () => onSelect?.(c) },
+        // Named by its own text, with the economy's full name added for assistive technology.
+        h('b', null, label(c)), ' ', h('small', null, fmt(v)), h('span', { class: 'sr-only' }, `, ${c.name}`));
       b.addEventListener('pointermove', e => showTip(e.clientX, e.clientY, [{ value: fmt(v), label: c.name }]));
       b.addEventListener('pointerleave', hideTip);
       return b;
@@ -235,9 +270,9 @@ export function dotMap({ cells, value, color, fmt, size = c => c.gdp, onSelect }
     for (const c of sorted) {
       const v = value(c), r = 4 + 16 * Math.sqrt(size(c) / maxS);
       const g = s('g', { class: 'dotg', tabindex: 0, role: 'button', 'aria-label': `${c.name}: ${fmt(v)}` },
-        s('circle', { cx: X(c.lon), cy: Y(c.lat), r: Math.max(12, r), fill: 'transparent' }),
+        s('circle', { cx: X(c.lon), cy: Y(c.lat), r: Math.max(8, r), fill: 'transparent' }),
         s('circle', { cx: X(c.lon), cy: Y(c.lat), r, class: 'bubble', style: { fill: color(v, c) } }),
-        W > 520 ? s('text', { x: X(c.lon), y: Y(c.lat) + r + 11, class: 'tick', 'text-anchor': 'middle' }, c.id) : null);
+        W > 380 ? s('text', { x: X(c.lon), y: Y(c.lat) + r + 11, class: 'tick', 'text-anchor': 'middle' }, c.id) : null);
       g.addEventListener('pointermove', e => showTip(e.clientX, e.clientY, [{ value: fmt(v), label: c.name }]));
       g.addEventListener('pointerleave', hideTip);
       g.addEventListener('click', () => onSelect?.(c));

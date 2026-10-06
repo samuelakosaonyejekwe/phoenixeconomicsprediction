@@ -53,7 +53,10 @@ self.addEventListener('fetch', e => {
   const url = new URL(req.url);
   if (url.origin !== location.origin) return; // publisher APIs go straight to the network
   if (url.pathname.endsWith('/data/snapshot.json')) { e.respondWith(snapshot(req)); return; }
-  if (req.mode === 'navigate') {
+  // The stored shell answers page loads of the app itself (its root and index.html); other documents under
+  // the same address, such as the single-file offline edition, are fetched as themselves.
+  const scope = new URL(self.registration.scope).pathname;
+  if (req.mode === 'navigate' && (url.pathname === scope || url.pathname === `${scope}index.html`)) {
     e.respondWith((async () => {
       const shell = (await caches.match('./')) || (await caches.match('index.html'));
       if (shell) return shell;

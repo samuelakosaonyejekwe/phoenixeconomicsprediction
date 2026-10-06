@@ -13,10 +13,10 @@
   {
    "n": 2,
    "risk": "Output gaps and scenarios use later data",
-   "treatment": "Real-time test on IMF vintages; the 2021 scenario uses only what was published by 31 December 2021. Financial accounts are revised and their latest release is used",
+   "treatment": "Real-time test on IMF vintages for the EU gaps and for the rest-of-world instrument; the 2021 scenario uses only what was published by 31 December 2021. Financial accounts are revised and their latest release is used",
    "status": "Bounded",
    "where": "§5.2, §7.2",
-   "resolution": "From now on every release is archived with its vintage, so first releases become available"
+   "resolution": "Each release is archived with its vintage, so first releases of the financial accounts accumulate"
   },
   {
    "n": 3,
@@ -37,10 +37,10 @@
   {
    "n": 5,
    "risk": "Short-panel bias",
-   "treatment": "Half-panel jackknife: estimates move by less than 0.02",
-   "status": "Removed",
+   "treatment": "Half-panel jackknife: κ moves by 0.004, a by 0.026 and γ_E by 0.021",
+   "status": "Bounded",
    "where": "§5.1",
-   "resolution": "—"
+   "resolution": "Bias-corrected estimates reported beside every estimator (Table 4)"
   },
   {
    "n": 6,
@@ -84,8 +84,8 @@
   },
   {
    "n": 11,
-   "risk": "Exclusion window chosen after seeing results",
-   "treatment": "No window excluded; scores by year",
+   "risk": "Scores sensitive to the evaluation window",
+   "treatment": "No origin below the trigger is excluded; scores by year",
    "status": "Removed",
    "where": "§6.3, Figure 3",
    "resolution": "—"
@@ -141,15 +141,15 @@
   {
    "n": 18,
    "risk": "Untested nowcast gain",
-   "treatment": "Diebold–Mariano: p=0.02 (36 months), 0.08 (120 months)",
+   "treatment": "Diebold–Mariano: p=0.02 (35 months), 0.08 (119 months)",
    "status": "Removed",
    "where": "§3.7",
    "resolution": "—"
   },
   {
    "n": 19,
-   "risk": "Exchange-rate nowcast applied to energy",
-   "treatment": "Exchange-rate part kept in core",
+   "risk": "Exchange-rate effect attributed to the wrong component",
+   "treatment": "Oil moves the energy price level; the exchange-rate part stays in core",
    "status": "Removed",
    "where": "§3.7",
    "resolution": "—"
@@ -157,14 +157,14 @@
   {
    "n": 20,
    "risk": "Weak monetary transmission in the model",
-   "treatment": "IS rate effect not identified in EU data; stance channel calibrated to the ECB estimate double-counts (error 3.14 → 3.60); equivalences use the ECB elasticity",
+   "treatment": "IS rate effect not identified in EU data; stance channel calibrated to the ECB estimate double-counts (error 3.14 → 3.60); equivalences use the elasticity implied by an ECB staff projection",
    "status": "Bounded",
    "where": "§5.3, §7.8",
    "resolution": "Re-estimated as data after the 2022–2023 tightening accumulate"
   },
   {
    "n": 21,
-   "risk": "US output-gap dynamics",
+   "risk": "Output-gap dynamics not identified in EU data",
    "treatment": "Persistence estimated on the euro area; rate effect not identifiable, kept from the literature and drawn 0–0.1",
    "status": "Bounded",
    "where": "§5.3, §7.7",
@@ -196,7 +196,7 @@
   },
   {
    "n": 25,
-   "risk": "Output gap frozen at an annual value",
+   "risk": "Output gap observed only annually",
    "treatment": "Monthly unemployment surprise × Okun coefficient",
    "status": "Removed",
    "where": "§3.5",
@@ -212,7 +212,7 @@
   },
   {
    "n": 27,
-   "risk": "Crude liquid share; nominal baseline",
+   "risk": "Measure sensitive to the definition of liquid deposits and to nominal growth",
    "treatment": "Excess deposits against a pace held as a share of GDP; idle part reported. Time deposits counted because redeemable within months",
    "status": "Bounded",
    "where": "§3.2",
@@ -228,11 +228,11 @@
   },
   {
    "n": 29,
-   "risk": "Borrowed inflow decay",
-   "treatment": "Estimated per sector from deposit flows",
-   "status": "Removed",
+   "risk": "Inflow decay not observed directly",
+   "treatment": "Estimated per sector from deposit flows; the government estimate is at its lower bound (no measurable persistence)",
+   "status": "Bounded",
    "where": "§3.4",
-   "resolution": "—"
+   "resolution": "Re-estimated with every release of the financial accounts"
   },
   {
    "n": 30,
@@ -260,7 +260,7 @@
   },
   {
    "n": 33,
-   "risk": "Optimisation on one scenario",
+   "risk": "Optimum specific to one scenario",
    "treatment": "Two scenarios, two horizons",
    "status": "Removed",
    "where": "Table 15",
@@ -300,7 +300,7 @@
   },
   {
    "n": 38,
-   "risk": "Basic integrator",
+   "risk": "Discretisation error of the first-order scheme",
    "treatment": "Time-step error measured: 0.20% of the effect",
    "status": "Removed",
    "where": "§8",
@@ -340,16 +340,16 @@
   },
   {
    "n": 43,
-   "risk": "Infeasible firm arm",
-   "treatment": "Redesigned to 16,600 firms per arm; rests on assumed take-up and R^2, with sensitivity",
+   "risk": "Firm arm rests on assumed take-up and R^2",
+   "treatment": "16,600 firms per arm under the stated assumptions; sensitivity reported",
    "status": "Bounded",
    "where": "§10.2",
    "resolution": "The same pilot for firms; sample re-sized on its results"
   },
   {
    "n": 44,
-   "risk": "Simulated trials by normal approximation",
-   "treatment": "Individual-level simulation",
+   "risk": "Power computed from an approximation",
+   "treatment": "Checked by individual-level simulation",
    "status": "Removed",
    "where": "§10.3",
    "resolution": "—"
@@ -376,7 +376,7 @@
    "treatment": "Key registration anchored at creation; identity requires qualified certificates",
    "status": "Bounded",
    "where": "§9.4",
-   "resolution": "eIDAS qualified certificates for mandate-holders and countersignature by the Court of Auditors (§9.4)"
+   "resolution": "eIDAS qualified certificates for mandate-holders and countersignature by the Fund's board of auditors (§9.4)"
   },
   {
    "n": 48,
@@ -388,30 +388,6 @@
   },
   {
    "n": 49,
-   "risk": "IMF vintage not identified",
-   "treatment": "April 2026 WEO; historical vintages listed",
-   "status": "Removed",
-   "where": "§3.1",
-   "resolution": "—"
-  },
-  {
-   "n": 50,
-   "risk": "Tiny numbers hard to read",
-   "treatment": "Units stated; detectability and plain statements",
-   "status": "Removed",
-   "where": "§7.9, executive summary",
-   "resolution": "—"
-  },
-  {
-   "n": 51,
-   "risk": "Long abstract, no summary",
-   "treatment": "Short abstract and executive summary",
-   "status": "Removed",
-   "where": "Front matter",
-   "resolution": "—"
-  },
-  {
-   "n": 52,
    "risk": "Real-time scenario with full-sample parameters",
    "treatment": "Scenario rerun with the Phillips curve estimated on the 2021 vintage and data to 2020; effect of the same order",
    "status": "Removed",
@@ -419,15 +395,15 @@
    "resolution": "—"
   },
   {
-   "n": 53,
-   "risk": "Inflation anchors fixed at today's targets",
+   "n": 50,
+   "risk": "Inflation anchors change over time",
    "treatment": "Targets in force at each date, from the central banks' records, in estimation and backtest",
    "status": "Removed",
    "where": "§5.1, §6.2",
    "resolution": "—"
   },
   {
-   "n": 54,
+   "n": 51,
    "risk": "Coarse global monitor",
    "treatment": "Annual saving and fiscal balances, fixed threshold, oil route for energy; breach volatility from each economy's IMF forecast errors; not evaluated, not used for any EU result",
    "status": "Bounded",
@@ -435,7 +411,7 @@
    "resolution": "Financial accounts used where economies publish them (US Z.1, UK ONS) as the panel is extended"
   },
   {
-   "n": 55,
+   "n": 52,
    "risk": "Implausible or unavailable source data",
    "treatment": "Plausibility check before replacement; previous copy kept; no unofficial substitute",
    "status": "Removed",

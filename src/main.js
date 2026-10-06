@@ -54,7 +54,7 @@ function setTheme(t) {
   themeBtn.replaceChildren(icon(dark ? 'sun' : 'moon'));
   render();
 }
-const themeBtn = h('button', { class: 'icon-btn', 'aria-label': 'Toggle dark mode', onclick: () => {
+const themeBtn = h('button', { class: 'icon-btn', 'aria-label': 'Toggle dark mode', 'data-tip': 'Switch between the light and the dark appearance.', onclick: () => {
   const dark = document.documentElement.dataset.theme === 'dark' || (!document.documentElement.dataset.theme && matchMedia('(prefers-color-scheme: dark)').matches);
   setTheme(dark ? 'light' : 'dark');
 } });
@@ -82,7 +82,7 @@ const searchBtn = h('button', { class: 'icon-btn', 'aria-label': 'Search (Ctrl+K
 const backBtn = h('button', { class: 'icon-btn back-btn', 'aria-label': 'Back', hidden: true, onclick: () => { if (depth > 0) history.back(); else location.hash = '#/overview'; } }, icon('back'));
 document.getElementById('top').append(
   backBtn,
-  h('a', { class: 'brand', href: '#/overview', 'aria-label': 'Phoenix home' }, h('img', { src: globalThis.PHX_ICON || 'icons/icon.svg', width: 28, height: 28, alt: '' }), h('span', null, 'Phoenix', h('small', null, 'Economics'))),
+  h('a', { class: 'brand', href: '#/overview', 'data-tip': 'Phoenix Economics: back to the Overview.' }, h('img', { src: globalThis.PHX_ICON || 'icons/icon.svg', width: 28, height: 28, alt: '' }), h('span', null, 'Phoenix', h('small', null, 'Economics'))),
   h('div', { class: 'top-c' }, regionSel),
   h('div', { class: 'top-r' }, livePill, searchBtn, themeBtn, installBtn));
 
@@ -92,9 +92,11 @@ document.getElementById('nav').append(...navLinks);
 const moreSheet = h('dialog', { class: 'sheet', 'aria-label': 'All pages' },
   h('div', { class: 'sheet-h' }, h('b', null, 'All pages'), h('button', { class: 'icon-btn', 'aria-label': 'Close', onclick: () => moreSheet.close() }, icon('close'))),
   h('div', { class: 'sheet-g' }, ROUTES.map(r => h('a', { href: `#/${r.id}`, class: 'sheet-a', dataset: { tip: PAGES[r.id] }, onclick: () => moreSheet.close() }, icon(r.icon, 22), h('span', null, r.label)))));
+// A tap on the backdrop closes the sheet, as Escape does.
+moreSheet.addEventListener('click', e => { if (e.target === moreSheet) moreSheet.close(); });
 document.body.append(moreSheet);
 const bottomLinks = ROUTES.filter(r => r.primary).map(r => h('a', { href: `#/${r.id}`, class: 'tab', dataset: { id: r.id, tip: PAGES[r.id] } }, icon(r.icon, 22), h('span', null, r.label.split(' ')[0])));
-document.getElementById('tabs').append(...bottomLinks, h('button', { class: 'tab', onclick: () => moreSheet.showModal() }, icon('more', 22), h('span', null, 'More')));
+document.getElementById('tabs').append(...bottomLinks, h('button', { class: 'tab', 'aria-haspopup': 'dialog', 'data-tip': 'All pages of the application.', onclick: () => moreSheet.showModal() }, icon('more', 22), h('span', null, 'More')));
 
 // In-app history depth, so the back button works inside the app (installed apps have no
 // browser buttons). Each new page gets a sequence number; back/forward restore it.
@@ -110,7 +112,7 @@ function updateChrome() {
   backBtn.hidden = depth === 0 && atHome;
   backBtn.dataset.tip = depth > 0 ? 'Back to the previous page' : 'Back to Overview';
   const r = routeOf();
-  for (const a of [...navLinks, ...bottomLinks]) { if (a.dataset.id === r.id) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); }
+  for (const a of [...navLinks, ...bottomLinks, ...moreSheet.querySelectorAll('a')]) { if ((a.dataset.id || a.getAttribute('href').slice(2)) === r.id) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); }
   regionSel.value = app.region;
   const st = Object.values(app.status);
   const live = st.filter(s => s.state === 'live').length, total = st.length;
@@ -130,12 +132,15 @@ function render() {
   hideTip();
   // Keep the reader's place across redraws: open explanations and the focused control.
   const open = same ? new Set([...main.querySelectorAll('details[open] > summary')].map(s => s.textContent)) : new Set();
+  // Cards showing their table keep showing it.
+  const tabled = same ? new Set([...main.querySelectorAll('.card')].filter(c => c.querySelector('.card-a .chip[aria-pressed="true"]')).map(c => c.querySelector('h3')?.firstChild?.textContent)) : new Set();
   const act = same && main.contains(document.activeElement) ? (document.activeElement.id || document.activeElement.getAttribute('aria-label')) : null;
   clear(main);
   try { r.view(main, app); }
   catch (e) { console.error(e); main.append(h('div', { class: 'empty' }, h('p', null, 'This view could not be drawn with the current data.'), h('pre', null, String(e.message || e)))); }
   if (same) {
     for (const s of main.querySelectorAll('details > summary')) if (open.has(s.textContent)) s.parentElement.open = true;
+    if (tabled.size) for (const c of main.querySelectorAll('.card')) if (tabled.has(c.querySelector('h3')?.firstChild?.textContent)) c.querySelector('.card-a .chip[aria-pressed="false"]')?.click();
     if (act) (document.getElementById(act) || main.querySelector(`[aria-label="${CSS.escape(act)}"]`))?.focus({ preventScroll: true });
     scrollTo(0, y);
   } else { scrollTo(0, 0); main.focus({ preventScroll: true }); }
@@ -169,6 +174,7 @@ addEventListener('offline', updateChrome);
 
 // Command palette: pages and economies.
 function palette() {
+  if (document.querySelector('dialog.palette[open]')) return;
   const input = h('input', { type: 'search', placeholder: 'Search pages and economies…', 'aria-label': 'Search', role: 'combobox', 'aria-expanded': 'true', 'aria-controls': 'pal-list', 'aria-autocomplete': 'list' });
   const list = h('ul', { class: 'pal-l', role: 'listbox', id: 'pal-list', 'aria-label': 'Results' });
   let items = [], sel = 0;
@@ -187,7 +193,8 @@ function palette() {
   input.addEventListener('keydown', e => {
     if (e.key === 'ArrowDown') { sel = Math.min(items.length - 1, sel + 1); draw(); e.preventDefault(); }
     if (e.key === 'ArrowUp') { sel = Math.max(0, sel - 1); draw(); e.preventDefault(); }
-    if (e.key === 'Enter' && items[sel]) go(items[sel]);
+    // Cancelled, or the same key press would also activate the button focused in what opens next.
+    if (e.key === 'Enter' && items[sel]) { e.preventDefault(); go(items[sel]); }
   });
   dlg.addEventListener('close', () => dlg.remove());
   document.body.append(dlg);

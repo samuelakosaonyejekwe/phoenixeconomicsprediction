@@ -138,7 +138,8 @@ export async function anchor(chain, endpoint, store) {
 
 export function toCSV(chain) {
   const cols = ['seq', 'ts', 'kind', 'cell', 'type', 'cause', 'pi', 'S', 'Scrit', 'Theta', 'converted', 'into', 'hash', 'kid', 'sig'];
-  const esc = v => { const s = v === null || v === undefined ? '' : String(v); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
+  // Text that a spreadsheet would read as a formula is prefixed with an apostrophe; numbers are left as they are.
+  const esc = v => { let s = v === null || v === undefined ? '' : String(v); if (typeof v === 'string' && /^[=+\-@\t\r]/.test(s)) s = `'${s}`; return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
   const rows = chain.map(e => [e.seq, e.ts, e.kind, e.cell, e.type, e.cause, e.indicators?.pi, e.indicators?.S, e.indicators?.Scrit, e.indicators?.Theta, e.converted, e.into, e.hash, e.kid, e.sig].map(esc).join(','));
   return [cols.join(','), ...rows].join('\n');
 }

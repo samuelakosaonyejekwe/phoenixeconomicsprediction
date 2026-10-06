@@ -70,48 +70,31 @@ export function design(cells, states, P, { nPerArm, seed = 20261004, maxStrata =
   return { seed, strata, nPerArm };
 }
 
-// Repeated simulated trials (sampling distributions of arm means, normal approximation): empirical
-// power, bias and coverage of the 95% interval (§10.3).
-export function simulateTrials(s, n, { reps = 2000, seed = 7 } = {}) {
-  const r = rng(seed);
-  const pT = s.takeup, pC = s.takeupC || 0, A = s.deposit, dlt = s.delta, sig = s.sigma * Math.sqrt(1 - (s.r2 || 0));
-  const nEff = Math.max(2, Math.round(n * (1 - (s.attrition || 0))));
-  const est = [];
-  let cover = 0, reject = 0;
-  for (let k = 0; k < reps; k++) {
-    // arm means of placed balances (log-normal amounts, CV 0.6) and spending changes
-    const dT = pT * A + Math.sqrt(pT * A * A * (1 + 0.36) - (pT * A) ** 2) / Math.sqrt(nEff) * gauss(r);
-    const dC = pC * A + Math.sqrt(Math.max(1e-9, pC * A * A * (1 + 0.36) - (pC * A) ** 2)) / Math.sqrt(nEff) * gauss(r);
-    const yT = -dlt * dT + sig / Math.sqrt(nEff) * gauss(r), yC = -dlt * dC + sig / Math.sqrt(nEff) * gauss(r);
-    const dd = dT - dC, e = -(yT - yC) / dd;
-    const se = Math.sqrt(2) * sig / Math.sqrt(nEff) / Math.abs(dd);
-    est.push(e);
-    if (Math.abs(e - dlt) <= 1.96 * se) cover++;
-    if (Math.abs(e / se) > 1.96) reject++;
-  }
-  est.sort((a, b) => a - b);
-  return { reps, power: reject / reps, coverage: cover / reps, mean: mean(est), p10: est[Math.floor(0.1 * reps)], p90: est[Math.floor(0.9 * reps)] };
-}
-
-// One simulated trial with individual records, for the data template (§10.3).
+// One simulated trial with individual records, for the data template (§10.3): pre-period spending is
+// log-normal, and its (standardised) logarithm explains the share R² of the variance of the change in
+// spending, as in the design.
 export function simulateTrial({ n, takeup, takeupC = 0, deposit, delta, sigma, r2 = 0.5, seed = 7 }) {
-  const r = rng(seed), rows = [];
+  const r = rng(seed), rows = [], rho = Math.sqrt(Math.max(0, Math.min(0.99, r2)));
   for (const arm of ['T', 'C']) for (let k = 0; k < n; k++) {
     const took = r() < (arm === 'T' ? takeup : takeupC) ? 1 : 0;
     const d = took ? Math.max(0, deposit * Math.exp(0.6 * gauss(r) - 0.18)) : 0;
-    const pre = 24000 * Math.exp(0.35 * gauss(r));
-    const common = Math.sqrt(r2) * sigma * gauss(r);
-    const post = pre + common + Math.sqrt(1 - r2) * sigma * gauss(r) - delta * d;
-    rows.push({ id: `${arm}${k + 1}`, arm, took, d, pre, post, prePrev: pre - common });
+    const z = gauss(r), pre = 24000 * Math.exp(0.35 * z);
+    const post = pre + rho * sigma * z + Math.sqrt(1 - rho * rho) * sigma * gauss(r) - delta * d;
+    rows.push({ id: `${arm}${k + 1}`, arm, took, d, pre, post });
   }
   return rows;
 }
 
-// Wald / IV estimator with ANCOVA adjustment and robust standard error (§10.3).
+// Wald / IV estimator with ANCOVA adjustment and robust standard error (§10.3): the change in spending is
+// adjusted for the logarithm of pre-period spending by the pooled within-arm regression slope.
 export function estimate(rows) {
   const T = rows.filter(x => x.arm === 'T'), C = rows.filter(x => x.arm === 'C');
   if (T.length < 2 || C.length < 2) return { ok: false };
-  const y = x => x.post - x.pre;
+  const cov = x => (x.pre > 0 ? Math.log(x.pre) : 0), y0 = x => x.post - x.pre;
+  let sxy = 0, sxx = 0;
+  for (const g of [T, C]) { const mc = mean(g.map(cov)), my = mean(g.map(y0)); for (const x of g) { sxy += (cov(x) - mc) * (y0(x) - my); sxx += (cov(x) - mc) ** 2; } }
+  const b = sxx > 0 && rows.every(x => x.pre > 0) ? sxy / sxx : 0, mAll = mean(rows.map(cov));
+  const y = x => y0(x) - b * (cov(x) - mAll);
   const dd = mean(T.map(x => x.d)) - mean(C.map(x => x.d));
   if (!(Math.abs(dd) > 1e-9)) return { ok: false, reason: 'No difference in PHX balances between arms.' };
   const itt = mean(T.map(y)) - mean(C.map(y));

@@ -1,9 +1,9 @@
 // Phoenix data refresh on Cloudflare: independent of GitHub and of any personal machine.
-// A cron trigger runs every 10 minutes and refreshes one group of sources in rotation, so every
-// source is refreshed hourly while each run stays within the free plan's CPU budget. Results are
-// stored in KV and served as one snapshot (same format as data/snapshot.json) with open CORS.
+// A cron trigger runs every 10 minutes and checks one group of sources in rotation, so every
+// source is checked hourly while each run stays within the free plan's CPU budget. Results are
+// stored in KV (written only when they change) and served as one snapshot (same format as data/snapshot.json) with open CORS.
 import { CONNECTORS, SERVER_SOURCES } from '../src/data/sources.js';
-import { checkSource, latestPeriod } from '../src/data/check.js';
+import { checkSource, latestPeriod, compact } from '../src/data/check.js';
 
 // Sources that publishers revise after first release: each new release is archived once under its latest
 // period, so first-release (real-time) data accumulate from now on and can be retrieved at /archive.
@@ -18,7 +18,9 @@ globalThis.fetch = (url, init = {}) => nativeFetch(url, { signal: init.signal, h
 // Needs a fine-grained token (Actions: read and write on this repository) in the secret GH_TOKEN.
 const REPO = 'samuelakosaonyejekwe/phoenixeconomicsprediction';
 const WORKFLOW = 'deploy.yml';
-const OVERDUE_MIN = 75;
+// The check runs once an hour, ten minutes into the same hour-slot each time, so a run it started an
+// hour ago is 60 minutes old: anything older than 50 minutes is overdue.
+const OVERDUE_MIN = 50;
 
 async function github(env, path, init = {}) {
   return nativeFetch(`https://api.github.com/repos/${REPO}${path}`, {
@@ -64,10 +66,14 @@ async function refreshGroup(env, g) {
     const bad = checkSource(id, data);
     if (bad) throw new Error(`implausible: ${bad}`);
     const fetchedAt = new Date().toISOString();
-    await env.DATA.put(`src:${id}`, JSON.stringify({ data, fetchedAt }));
+    // Stored only when the publisher's data changed: most sources change monthly or quarterly, and the
+    // key-value store allows 1,000 writes a day. The time of the last successful check is kept in `meta`
+    // and published as the copy's fetch time.
+    const body = JSON.stringify(data, compact), key = `src:${id}`, old = await env.DATA.get(key);
+    if (!old || old.slice(8, old.lastIndexOf(',"fetchedAt":"')) !== body) await env.DATA.put(key, `{"data":${body},"fetchedAt":"${fetchedAt}"}`);
     if (ARCHIVED.includes(id)) {
-      const lp = latestPeriod(data), key = `vin:${id}:${lp === null ? 'none' : `${Math.floor(lp / 12)}-${String(lp % 12 + 1).padStart(2, '0')}`}`;
-      if (!(await env.DATA.get(key, { type: 'stream' }))) await env.DATA.put(key, JSON.stringify({ data, firstSeen: fetchedAt }));
+      const lp = latestPeriod(data), vinKey = `vin:${id}:${lp === null ? 'none' : `${Math.floor(lp / 12)}-${String(lp % 12 + 1).padStart(2, '0')}`}`;
+      if (!(await env.DATA.get(vinKey, { type: 'stream' }))) await env.DATA.put(vinKey, JSON.stringify({ data, firstSeen: fetchedAt }));
     }
     return { id, fetchedAt };
   }));
@@ -85,10 +91,12 @@ async function snapshot(env) {
   const present = parts.filter(([, v]) => v);
   // Build time = the newest fetch among stored sources; the oldest fetch and any failing sources are
   // published alongside, so the snapshot never looks fresher than its stalest part.
-  const times = present.map(([, v]) => v.slice(v.lastIndexOf('"fetchedAt":"') + 13, v.lastIndexOf('"fetchedAt":"') + 37)).sort();
   const meta = JSON.parse((await env.DATA.get('meta')) || '{}');
+  // Each copy is published with the time it was last confirmed against its publisher.
+  const stamped = present.map(([id, v]) => { const i = v.lastIndexOf(',"fetchedAt":"'), stored = v.slice(i + 14, i + 38), at = meta.sources?.[id]?.at; return [id, `${v.slice(0, i)},"fetchedAt":"${at && at > stored ? at : stored}"}`, at && at > stored ? at : stored]; });
+  const times = stamped.map(x => x[2]).sort();
   const failing = Object.entries(meta.sources || {}).filter(([, v]) => !v.ok).map(([k]) => k);
-  return `{"builtAt":"${times.at(-1) || new Date().toISOString()}","oldestSource":"${times[0] || ''}","failing":${JSON.stringify(failing)},"origin":"cloudflare-worker","sources":{${present.map(([id, v]) => `"${id}":${v}`).join(',')}}}`;
+  return `{"builtAt":"${times.at(-1) || new Date().toISOString()}","oldestSource":"${times[0] || ''}","failing":${JSON.stringify(failing)},"origin":"cloudflare-worker","sources":{${stamped.map(([id, v]) => `"${id}":${v}`).join(',')}}}`;
 }
 
 const cors = { 'access-control-allow-origin': '*', 'access-control-allow-methods': 'GET, POST, OPTIONS', 'access-control-allow-headers': 'content-type', 'x-content-type-options': 'nosniff' };
@@ -102,7 +110,7 @@ async function anchorPost(request, env) {
   const text = await request.text();
   if (text.length > 6000) return json({ error: 'too large' }, 413);
   let b; try { b = JSON.parse(text); } catch { return json({ error: 'bad json' }, 400); }
-  if (!HEX64.test(b.hash || '') || !Number.isInteger(b.seq) || b.seq < 0) return json({ error: 'hash (64 hex) and seq (integer) required' }, 400);
+  if (!b || typeof b !== 'object' || !HEX64.test(b.hash || '') || !Number.isInteger(b.seq) || b.seq < 0) return json({ error: 'hash (64 hex) and seq (integer) required' }, 400);
   const key = `anchor:${b.hash}`;
   const existing = await env.DATA.get(key);
   if (existing) return json(JSON.parse(existing));
@@ -113,16 +121,17 @@ async function anchorPost(request, env) {
     const digest = [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(b.hash)))].map(x => x.toString(16).padStart(2, '0')).join('');
     if (b.rekor.kind !== 'hashedrekord' || v?.algorithm !== 'sha256' || v?.value !== digest) return json({ error: 'transparency-log entry does not commit to this hash' }, 400);
   }
-  // Limits: 10 new anchors per client address per hour and 100 per day overall, so anchors (with the
-  // hourly data refresh, about 850 writes a day) stay within the 1,000 daily key-value writes of the
-  // free plan. The counters are kept per data centre, so the limits are approximate.
+  // Limits: 10 new anchors per client address per hour and 200 per day overall. With the data refresh
+  // (which writes a source only when it changed, plus its status: about 200 writes a day) this stays well
+  // within the 1,000 daily key-value writes of the free plan, even though the counters are kept per data
+  // centre and the limits are therefore approximate.
   const cache = caches.default, ip = request.headers.get('cf-connecting-ip') || 'unknown';
   const hour = new Date().toISOString().slice(0, 13), day = hour.slice(0, 10);
   const ipKey = new Request(`https://cap.local/ip/${encodeURIComponent(ip)}/${hour}`), dayKey = new Request(`https://cap.local/day/${day}`);
   const [ipHit, dayHit] = await Promise.all([cache.match(ipKey), cache.match(dayKey)]);
   const ipUsed = ipHit ? +(await ipHit.text()) : 0, dayUsed = dayHit ? +(await dayHit.text()) : 0;
   if (ipUsed >= 10) return json({ error: 'hourly anchor limit for this client reached' }, 429);
-  if (dayUsed >= 100) return json({ error: 'daily anchor limit reached' }, 429);
+  if (dayUsed >= 200) return json({ error: 'daily anchor limit reached' }, 429);
   await Promise.all([cache.put(ipKey, new Response(String(ipUsed + 1), { headers: { 'cache-control': 'max-age=3600' } })), cache.put(dayKey, new Response(String(dayUsed + 1), { headers: { 'cache-control': 'max-age=86400' } }))]);
   // Public transparency log (Sigstore Rekor): independent, append-only, signed inclusion records.
   let rekor = null;
@@ -182,13 +191,14 @@ export default {
       return json({ releases: keys.sort() });
     }
     if (url.pathname.startsWith('/archive/')) {
-      const v = await env.DATA.get(`vin:${decodeURIComponent(url.pathname.slice(9))}`);
+      let name; try { name = decodeURIComponent(url.pathname.slice(9)); } catch { return json({ error: 'bad name' }, 400); }
+      const v = await env.DATA.get(`vin:${name}`);
       return v ? new Response(v, { headers: { ...cors, 'content-type': 'application/json', 'cache-control': 'public, max-age=86400' } }) : json({ error: 'not found' }, 404);
     }
     if (url.pathname === '/health') {
       const [meta, wd] = await Promise.all([env.DATA.get('meta'), env.DATA.get('watchdog')]);
       return new Response(JSON.stringify({ refresh: JSON.parse(meta || '{}'), groups: GROUPS, githubWatchdog: JSON.parse(wd || '{}') }), { headers: { ...cors, 'content-type': 'application/json' } });
     }
-    return new Response('Phoenix Economics data service. GET /snapshot.json, /health, /anchor/<hash>, /archive, /archive/<source>:<period>; POST /anchor.', { headers: { ...cors, 'content-type': 'text/plain; charset=utf-8' } });
+    return new Response('Phoenix Economics data service. GET /snapshot.json, /health, /anchor/<hash>, /archive, /archive/<source>:<period>; POST /anchor.', { status: url.pathname === '/' ? 200 : 404, headers: { ...cors, 'content-type': 'text/plain; charset=utf-8' } });
   },
 };

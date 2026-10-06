@@ -1,4 +1,4 @@
-import { h, icon, num, eur, pct, ago } from '../ui/dom.js';
+import { h, num, eur, pct } from '../ui/dom.js';
 import { card, lineChart, tileMap, dotMap, SERIES, seqColor, divColor, legendEl, sparkline } from '../ui/charts.js';
 import { marketDrivers } from '../model/nowcast.js';
 import { LOOP } from '../content/framework.js';
@@ -10,7 +10,7 @@ const METRICS = {
   state: { label: 'Contract state' },
   pi: { label: 'Inflation' },
   rho: { label: 'Surplus / S_crit' },
-  risk: { label: 'Breach probability' },
+  risk: { label: 'Breach probability', tip: 'Colour economies by the probability that inflation touches the trigger within twelve months.' },
 };
 let metric = 'state';
 
@@ -25,18 +25,19 @@ export function overview(root, app) {
   const piOff = cells.reduce((a, c) => a + (c.piOfficial ?? c.pi) * c.gdp, 0) / gw;
   const ncAsOf = cells.map(c => c.nowcast?.asOf).filter(Boolean).sort().pop();
   const md = marketDrivers(app.data);
-  const mkt = (label, series, fmt, color) => {
+  // Prices change in per cent; interest rates, already in per cent, change in percentage points.
+  const mkt = (label, series, fmt, color, rate = false) => {
     const v = series.at(-1), prev = series.at(-21) || series[0];
     return h('div', { class: 'mkt' }, h('span', { class: 'kpi-l' }, label), h('b', null, v ? fmt(v[1]) : '–'),
       sparkline(series.slice(-60).map(r => r[1]), { w: 110, color }),
-      h('small', { class: 'muted' }, v ? `${v[0]}${prev ? ` · ${num((v[1] / prev[1] - 1) * 100, 1)}% vs 1 month` : ''}` : 'awaiting data'));
+      h('small', { class: 'muted' }, v ? `${v[0]}${prev ? (rate ? ` · ${v[1] - prev[1] >= 0 ? '+' : '−'}${num(Math.abs(v[1] - prev[1]), 2)} pp vs 1 month` : ` · ${num((v[1] / prev[1] - 1) * 100, 1)}% vs 1 month`) : ''}` : 'awaiting data'));
   };
   const markets = card({ title: 'Daily drivers', sub: 'Business-day prices that move the inflation nowcast between official releases',
     body: h('div', { class: 'mkts' },
       mkt('Brent crude in €', md.oilEur, v => `€${num(v, 2)}`, SERIES[1]),
       mkt('EUR / USD', md.eurusd, v => num(v, 4), SERIES[0]),
-      mkt('€STR overnight rate', md.estr, v => `${num(v, 3)}%`, SERIES[2]),
-      mkt('10-year AAA yield', md.y10, v => `${num(v, 2)}%`, SERIES[6])) });
+      mkt('€STR overnight rate', md.estr, v => `${num(v, 3)}%`, SERIES[2], true),
+      mkt('10-year AAA yield', md.y10, v => `${num(v, 2)}%`, SERIES[6], true)) });
   const Stot = cells.reduce((s, c) => s + states[c.id].S, 0), Scrit = cells.reduce((s, c) => s + states[c.id].Scrit, 0);
   const sim = app.sim(true), base = app.sim(false);
   const end = sim?.agg.at(-1), endB = base?.agg.at(-1);
@@ -55,7 +56,7 @@ export function overview(root, app) {
       h('span', { class: 'muted' }, endB ? `${pct(endB.pi, 2)} without Phoenix (${num(end.pi - endB.pi, 4)} pp)` : '')));
 
   const kpis = h('div', { class: 'kpis' },
-    kpi({ label: P.nowcast && ncAsOf ? `Weighted inflation, nowcast ${ncAsOf}` : 'Weighted inflation', value: pct(piW, 2), sub: P.nowcast && ncAsOf ? `Official ${pct(piOff, 2)} (${cells[0].piPeriod})` : `Official, ${cells[0].piPeriod}`, delta: `${num(piW - P.target, 2)} pp vs target`, good: piW <= P.target }),
+    kpi({ label: P.nowcast && ncAsOf ? `Weighted inflation, nowcast ${ncAsOf}` : 'Weighted inflation', value: pct(piW, 2), sub: P.nowcast && ncAsOf ? `Official ${pct(piOff, 2)}, ${cells[0].piPeriod.replace(/[()]/g, '')}` : `Official, ${cells[0].piPeriod.replace(/[()]/g, '')}`, delta: `${num(piW - P.target, 2)} pp vs target`, good: piW <= P.target }),
     kpi({ label: 'Excess deposits', value: eur(Stot, 0), sub: `Threshold S_crit ${eur(Scrit, 0)} · ${num(Stot / Scrit, 2)}× (Solutions §3.2–3.3)`, good: Stot <= Scrit }),
     app.region !== 'global' && liq ? kpi({ label: 'Eurosystem deposit facility', value: eur(liq[1] / 1000, 0), sub: `Banks’ overnight deposits at the Eurosystem, week ${liq[0]}` }) : kpi({ label: 'Economies monitored', value: String(cells.length), sub: 'IMF / World Bank panel' }),
     sim ? kpi({ label: 'Output gap and policy rate', value: `${num(sim.agg[0].x, 1)}% · ${pct(sim.agg[0].i, 2)}`, sub: `GDP-based gap updated by monthly unemployment; ${app.region === 'global' ? 'Taylor rule where no market path exists' : 'ECB deposit facility, then the forward curve'} (Solutions §3.5, §4.10)` }) : null,
@@ -83,8 +84,8 @@ export function overview(root, app) {
       : tileMap({ cells, value, color, fmt, onSelect: c => openCountry(app, c) }));
   };
   drawMap();
-  const seg = h('div', { class: 'seg', role: 'tablist' }, Object.entries(METRICS).map(([k, m]) => h('button', { role: 'tab', 'aria-selected': String(metric === k), class: metric === k ? 'on' : '', onclick: e => {
-    metric = k; seg.querySelectorAll('button').forEach(b => { b.classList.remove('on'); b.setAttribute('aria-selected', 'false'); }); e.currentTarget.classList.add('on'); e.currentTarget.setAttribute('aria-selected', 'true'); drawMap(); legendHost.replaceChildren(mapLegend());
+  const seg = h('div', { class: 'seg', role: 'group', 'aria-label': 'Measure shown on the map' }, Object.entries(METRICS).map(([k, m]) => h('button', { 'aria-pressed': String(metric === k), 'data-tip': m.tip, class: metric === k ? 'on' : '', onclick: e => {
+    metric = k; seg.querySelectorAll('button').forEach(b => { b.classList.remove('on'); b.setAttribute('aria-pressed', 'false'); }); e.currentTarget.classList.add('on'); e.currentTarget.setAttribute('aria-pressed', 'true'); drawMap(); legendHost.replaceChildren(mapLegend());
   } }, m.label)));
   const mapLegend = () => metric === 'state'
     ? legendEl(['ACTIVE', 'ARMED', 'WATCH', 'DORMANT'].map(k => ({ label: STATE_META[k].label, color: STATE_COLOR[k] })))
@@ -104,7 +105,7 @@ export function overview(root, app) {
 
   const alerts = cells.filter(c => states[c.id].state !== 'DORMANT').sort((a, b) => ['ACTIVE', 'ARMED', 'WATCH'].indexOf(states[a.id].state) - ['ACTIVE', 'ARMED', 'WATCH'].indexOf(states[b.id].state) || b.pi - a.pi).slice(0, 8);
   const alertCard = card({
-    title: 'Priority alerts', sub: 'Economies where contracts are active, armed or on watch',
+    title: 'Priority alerts', sub: `Economies where contracts are active, armed or on watch${cells.filter(c => states[c.id].state !== 'DORMANT').length > 8 ? `: the 8 most urgent of ${cells.filter(c => states[c.id].state !== 'DORMANT').length}` : ''}`,
     body: alerts.length ? h('ul', { class: 'alerts' }, alerts.map(c => {
       const st = states[c.id];
       return h('li', null, h('button', { class: 'alert-row', 'data-tip': `${c.name}: ${STATE_META[states[c.id].state]?.desc || ''} Select for its inflation history, forecast and sector breakdown.`, onclick: () => openCountry(app, c) },

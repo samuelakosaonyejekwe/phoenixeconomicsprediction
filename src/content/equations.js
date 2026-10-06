@@ -1,5 +1,5 @@
 // The equations the engine solves, the supporting measurement and estimation formulas, and the
-// institutional design, exactly as set out in Phoenix Economics Solutions (4 October 2026). `tex`
+// institutional design, exactly as set out in Phoenix Economics Solutions (6 October 2026). `tex`
 // strings are rendered to MathML at build time.
 
 export const EQUATIONS = [

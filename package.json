@@ -6,8 +6,8 @@
     "snapshot": "node scripts/snapshot.mjs",
     "build": "node scripts/build.mjs",
     "dev": "node scripts/build.mjs && python3 -m http.server 8080 --directory dist",
-    "deploy:cloudflare": "npm run build && npx --yes wrangler@4 pages deploy dist --project-name=phoenixeconomics --branch=main",
-    "deploy:worker": "cd cloudflare && npx --yes wrangler@4 deploy",
+    "deploy:cloudflare": "npm run build && npx --yes wrangler@4.147.0 pages deploy dist --project-name=phoenixeconomics --branch=main",
+    "deploy:worker": "cd cloudflare && npx --yes wrangler@4.147.0 deploy",
     "test": "node --test test/*.test.mjs",
     "test:e2e": "node e2e/app.mjs",
     "test:full": "node scripts/check-paper.mjs",
@@ -21,6 +21,9 @@
     "esbuild": "^0.28.2",
     "katex": "^0.19.0",
     "playwright-core": "1.49"
+  },
+  "engines": {
+    "node": ">=20"
   },
   "private": true
 }

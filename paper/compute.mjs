@@ -58,7 +58,7 @@ let msg; globalThis.self = { postMessage: d => { if (d.done) msg = d; } };
 await import(R + 'workers/montecarlo.js');
 for (const [name, cells, sc, m] of [['ea', core.cellsEA, SCENARIOS.live, mkt], ['eu2021', ref21, SCENARIOS.episode, mktEp]]) {
   self.onmessage({ data: { cells, P, scenario: sc, runs: 200, seed: 20261004, market: m, est: out.phillips.full.iv, kStanceAlt: out.transmission.kCalibrated } });
-  out['mc_' + name] = { dPi: msg.dPi, dPi12: msg.dPi12, dI: msg.dI, dX: msg.dX, belowOn: msg.belowOn, belowOff: msg.belowOff, absorbed: msg.absorbed, maxResidual: msg.maxResidual, runs: msg.runs };
+  out['mc_' + name] = { dPi: msg.dPi, dPiRange: msg.dPiRange, dPi12: msg.dPi12, dI: msg.dI, dX: msg.dX, belowOn: msg.belowOn, belowOff: msg.belowOff, absorbed: msg.absorbed, maxResidual: msg.maxResidual, runs: msg.runs };
 }
 log('stress tests done');
 
