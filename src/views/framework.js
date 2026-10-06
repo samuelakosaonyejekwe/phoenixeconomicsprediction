@@ -8,7 +8,9 @@ import { pageHead, explain } from './common.js';
 
 const VIEW_LABEL = { overview: 'Overview', detect: 'Surplus radar', simulate: 'Simulation lab', redistribute: 'Redistribution', contracts: 'Contracts & audit', forecast: 'Early warning', stability: 'Stability', framework: 'Framework', pilot: 'Pilot planner', governance: 'Design & governance', validate: 'Evidence', data: 'Data & status' };
 
-const math = (key, display = true) => h('div', { class: display ? 'math' : 'math-inline', html: MATH[key] || '' });
+// Each equation explains itself on hover: its name and what it says, or for a supporting definition its title.
+const ABOUT = Object.fromEntries([...EQUATIONS.flatMap(e => [[e.id, `Equation ${e.n}, ${e.name}: ${e.what}`], ...e.rel.map((_, i) => [`${e.id}-r${i}`, `Definitions used by equation ${e.n}, ${e.name}: ${e.what}`])]), ...SUPPORT.map(e => [e.id, `${e.title}: a supporting definition of the model.`])]);
+const math = (key, display = true) => h('div', { class: display ? 'math' : 'math-inline', html: MATH[key] || '', 'data-tip': ABOUT[key] });
 
 export function framework(root, app) {
   // Interactive explorers.

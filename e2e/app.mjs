@@ -38,16 +38,22 @@ for (const r of ['overview', 'detect', 'simulate', 'redistribute', 'contracts', 
   const text = await page.locator('main').innerText();
   if (text.length < 200) fail(`page ${r} is nearly empty`);
   if (/\bNaN\b|undefined/.test(text)) fail(`page ${r} shows NaN or undefined`);
-  // Every visible label explains itself on hover (src/ui/annotate.js); map tiles, bars and chart points
+  // Every visible label, headline figure, table cell, meter and heading explains itself on hover (src/ui/annotate.js); map tiles, bars and chart points
   // show their own values.
-  const bare = await page.evaluate(() => [...document.querySelectorAll('main :is(h3, .kpi-l, th[scope=col], .legend li, .badge, button, .chip, summary, label, .ctrl-l), nav a, #top button, #top select')]
-    .filter(e => !e.closest('.tile, .dotg, .bar-row, .bar-seg, .cell') && e.textContent.trim() && e.offsetParent !== null && !e.closest('[data-tip]'))
+  const bare = await page.evaluate(() => [...document.querySelectorAll('main :is(h3, .kpi-l, th[scope=col], .legend li, .badge, button, .chip, summary, label, .ctrl-l, td, th[scope=row], .kpi, .kpi-v, .kpi-s, .meter, h1, .card-h .sub), nav a, #top button, #top select')]
+    .filter(e => !e.closest('.tile, .dotg, .bar-row, .bar-seg, .cell') && e.textContent.trim() && e.offsetParent !== null && !e.closest('[data-tip]:not([data-tip-scope])'))
     .map(e => e.textContent.trim().replace(/\s+/g, ' ').slice(0, 60)));
   if (bare.length) fail(`page ${r}: labels without an explanation: ${bare.join(' | ')}`);
+  // Nothing on a page is left without an explanation: every visible piece of text sits in an element
+  // that explains itself, in its card, or at least in the page.
+  const silent = await page.evaluate(() => { const w = document.createTreeWalker(document.querySelector('main'), NodeFilter.SHOW_TEXT); let n, k = 0; while ((n = w.nextNode())) { const el = n.parentElement; if (n.textContent.trim() && el && el.getClientRects().length && !el.closest('[data-tip], .tile, .dotg, .bar-row, .bar-seg, .cell, .chart')) k++; } return k; });
+  if (silent) fail(`page ${r}: ${silent} pieces of text show no explanation on hover`);
   const first = page.locator('main h3[data-tip]').first();
   if (await first.count()) {
     await first.hover();
-    const shown = await page.locator('.tip.tip-note').evaluate(e => getComputedStyle(e).display !== 'none' && e.textContent.length > 10).catch(() => false);
+    // A redraw while live data arrive hides the explanation for a frame and shows it again: allow for it.
+    let shown = false;
+    for (let k = 0; k < 10 && !shown; k++) { shown = await page.locator('.tip.tip-note').evaluate(e => getComputedStyle(e).display !== 'none' && e.textContent.length > 10).catch(() => false); if (!shown) await page.waitForTimeout(200); }
     if (!shown) fail(`page ${r}: hovering a card title shows no explanation`);
   }
   console.log('ok page', r);

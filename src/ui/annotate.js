@@ -41,6 +41,54 @@ export function annotate(root) {
     // Card titles get a focusable marker, so keyboard and touch users can reach the explanation too.
     if (el.tagName === 'H3' && !el.querySelector('.tip-i')) el.append(h('span', { class: 'tip-i', tabindex: 0, role: 'note', 'aria-label': tip, 'data-tip': tip }, 'i'));
   }
+  surround(root);
+}
+
+// Beyond labels: whatever the pointer rests on explains itself. A headline tile, a card header and a
+// page heading take the explanation of their label; a meter says what its bar shows; every table cell
+// says which row and column it belongs to and what the column means.
+const text = el => (el ? el.textContent.replace(/\s+/g, ' ').trim() : '');
+const within = (root, sel) => [...(root.matches?.(sel) ? [root] : []), ...root.querySelectorAll(sel)];
+function surround(root) {
+  for (const el of within(root, '.kpi, .mkt')) { const t = el.querySelector('.kpi-l')?.dataset.tip; if (t && !el.dataset.tip) el.dataset.tip = t; }
+  for (const el of within(root, '.card-h')) { const t = el.querySelector('h3')?.dataset.tip; if (t && !el.dataset.tip) el.dataset.tip = t; }
+  for (const el of within(root, '.page-h')) {
+    if (el.dataset.tip) continue;
+    const id = location.hash.split('?')[0].slice(2) || 'overview';
+    el.dataset.tip = PAGES[id] || text(el.querySelector('.lead')) || text(el.querySelector('h1'));
+  }
+  for (const el of within(root, '.meter')) if (!el.dataset.tip) el.dataset.tip = `${el.getAttribute('aria-label') || text(el.querySelector('.meter-top span'))}: ${text(el.querySelector('.meter-top b'))}. The bar fills towards its limit and turns amber, then red, as it approaches it.`;
+  for (const el of within(root, '.ledger > li')) if (!el.dataset.tip) el.dataset.tip = 'One signed entry of the audit ledger: what changed, when, the values that caused it, and the start of its hash.';
+  for (const el of within(root, '.obj-chip, .state-pill')) if (!el.dataset.tip && el.getAttribute('title')) { el.dataset.tip = el.getAttribute('title'); el.removeAttribute('title'); }
+  for (const el of within(root, '.state-pill')) if (!el.dataset.tip) el.dataset.tip = `${lookup(text(el).replace(/^[\d\s]+/, '')) || 'Economies in this contract state.'} Select to see them.`;
+  for (const el of within(root, 'ol.loop > li')) if (!el.dataset.tip) el.dataset.tip = `Stage ${text(el.querySelector('.loop-n'))} of the control loop, ${text(el.querySelector('b'))}: today’s value ${text(el.querySelector('.loop-v')) || 'n/a'} (${text(el.querySelector('small'))}).`;
+  for (const el of within(root, '.hero-main')) if (!el.dataset.tip) el.dataset.tip = 'Today’s headline for the selected region: how many economies have active contracts, and inflation against the trigger.';
+  for (const el of within(root, '.hero-fig')) if (!el.dataset.tip) el.dataset.tip = 'Projected inflation at the end of the horizon with Phoenix, and without it in brackets; the difference is Phoenix’s effect.';
+  for (const el of within(root, '.src-line')) if (!el.dataset.tip) el.dataset.tip = 'Publishers of the data on this page and when it was last fetched; the Data & status page lists every source.';
+  for (const el of within(root, 'ol.flows > li')) if (!el.dataset.tip) { const b = el.querySelectorAll('b'); el.dataset.tip = `Wallet liquidity routed from ${text(b[0])} to ${text(b[1])} over the horizon: ${text(el.querySelector('.v'))}, across ${text(el.querySelector('.muted'))}.`; }
+  for (const el of within(root, '.state-legend > div')) if (!el.dataset.tip) el.dataset.tip = `${text(el.querySelector('.badge'))}: ${text(el.querySelector(':scope > span:last-child'))}`;
+  for (const el of within(root, 'dl.io > dd')) if (!el.dataset.tip) { const dt = el.previousElementSibling; if (dt?.tagName === 'DT') { const t = `${text(dt)}: ${text(el)}`.slice(0, 400); el.dataset.tip = t; if (!dt.dataset.tip) dt.dataset.tip = t; } }
+  for (const el of within(root, 'details.explain > div')) if (!el.dataset.tip) el.dataset.tip = `${text(el.previousElementSibling)}: the method behind this page, in plain words.`;
+  // Anything else inside a card is explained by the card; anything else on the page by the page.
+  for (const el of within(root, '.card')) { const t = el.querySelector('h3')?.dataset.tip; if (t) for (const part of el.querySelectorAll(':scope > .card-body, :scope > .tbl-host, :scope > .legend')) if (!part.dataset.tip) { part.dataset.tip = t; part.dataset.tipScope = 'card'; } }
+  const main = document.getElementById('main');
+  if (main && (root === main || main.contains(root))) { const id = location.hash.split('?')[0].slice(2) || 'overview'; for (const el of main.children) if (!el.dataset.tip && PAGES[id]) { el.dataset.tip = PAGES[id]; el.dataset.tipScope = 'page'; } }
+  const tables = new Set(within(root, 'table'));
+  const own = root.closest?.('table'); if (own) tables.add(own);
+  for (const t of tables) {
+    const heads = [...t.querySelectorAll('thead th')];
+    for (const row of t.querySelectorAll('tbody tr')) {
+      const rowName = text(row.cells[0]);
+      for (const cell of row.cells) {
+        if (cell.dataset.tip) continue;
+        const head = heads[cell.cellIndex], col = text(head), about = head?.dataset.tip;
+        const value = text(cell);
+        cell.dataset.tip = cell.cellIndex === 0
+          ? `${value || 'Row'}${col ? ` — ${col}` : ''}${about ? `: ${about}` : ''}`
+          : `${rowName}${col ? ` · ${col}` : ''}${value ? ` = ${value}` : ''}${about ? `. ${about}` : ''}`;
+      }
+    }
+  }
 }
 
 // One tooltip for the whole document: shown on hover, focus or tap of any element with data-tip.
@@ -63,7 +111,9 @@ export function installTips(doc = document) {
   const hide = () => { cur = null; hideTip(); };
   showFor = show;
   doc.addEventListener('pointermove', e => { lastX = e.clientX; lastY = e.clientY; }, { passive: true });
-  doc.addEventListener('pointerover', e => { lastX = e.clientX; lastY = e.clientY; const el = e.target.closest?.('[data-tip]'); if (el && el !== cur) show(el); else if (!el && cur) hide(); });
+  // Charts, maps and bars show their own live values: a surrounding explanation stays out of their way.
+  const tipFor = t => { const el = t.closest?.('[data-tip]'), own = t.closest?.(`${OWN}, .chart`); return el && own && el !== own && el.contains(own) ? null : el; };
+  doc.addEventListener('pointerover', e => { lastX = e.clientX; lastY = e.clientY; const el = tipFor(e.target); if (el && el !== cur) show(el); else if (!el && cur) hide(); });
   doc.addEventListener('pointerdown', e => { if (!e.target.closest?.('[data-tip]')) hide(); });
   doc.addEventListener('focusin', e => { const el = e.target.closest?.('[data-tip]'); if (el) show(el); });
   doc.addEventListener('focusout', hide);
