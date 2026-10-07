@@ -1,6 +1,6 @@
 // Dependency-free SVG/HTML charts: line (with bands and crosshair), stacked bars,
 // heat matrix, tile map, dot map, sparkline and meter. Charts of series and bars offer a table view.
-import { h, s, clear, showTip, hideTip, num } from './dom.js';
+import { h, s, clear, showTip, hideTip, num, small } from './dom.js';
 
 export const SERIES = ['var(--s1)', 'var(--s2)', 'var(--s3)', 'var(--s4)', 'var(--s5)', 'var(--s6)', 'var(--s7)', 'var(--s8)'];
 const SEQ = ['#cde2fb', '#9ec5f4', '#6da7ec', '#3987e5', '#256abf', '#184f95', '#0d366b'];
@@ -90,7 +90,10 @@ export function dataTable({ cols, rows }) {
 }
 
 // Multi-series line chart with optional uncertainty bands, reference lines and crosshair.
-export function lineChart({ series, bands = [], height = 220, yFmt = v => num(v, 1), xFmt = v => num(v, 0), refs = [], vlines = [], yMin, yMax, xLabel }) {
+export function lineChart({ series, bands = [], height = 220, yFmt = v => num(v, 1), xFmt = v => num(v, 0), refs = [], vlines = [], yMin, yMax, xLabel, gap = false }) {
+  // gap: the chart compares two paths that may coincide at its scale; their difference is then stated
+  // in figures, under the chart and beside the pointer.
+  const gapAt = xv => { const [p, q] = series.map(se => se.values.find(v => v[0] === xv)); return p && q ? p[1] - q[1] : null; };
   const host = h('div', { class: 'chart', tabindex: 0, role: 'img', 'aria-label': series.map(s => s.name).join(', ') });
   const all = series.flatMap(s => s.values);
   const xs = [...new Set(all.map(v => v[0]))].sort((a, b) => a - b);
@@ -158,6 +161,7 @@ export function lineChart({ series, bands = [], height = 220, yFmt = v => num(v,
         dots[k].setAttribute('cx', X(p[0])); dots[k].setAttribute('cy', Y(p[1])); dots[k].setAttribute('visibility', 'visible');
         rows.push({ color: se.color, value: yFmt(p[1]), label: se.name });
       });
+      if (gap && gapAt(xv) !== null) rows.push({ value: small(gapAt(xv), 4), label: 'Difference' });
       const r = host.getBoundingClientRect();
       showTip(cx ?? r.left + X(xv), cy ?? r.top + m.t, rows, xFmt(xv));
     };
@@ -178,6 +182,10 @@ export function lineChart({ series, bands = [], height = 220, yFmt = v => num(v,
     host.append(svg);
     // The axis caption is ordinary text below the plot, so a long one wraps instead of being cut off.
     if (xLabel) host.append(h('p', { class: 'chart-cap' }, xLabel));
+    if (gap) {
+      const far = xs.reduce((best, xv) => { const d = gapAt(xv); return d !== null && Math.abs(d) > Math.abs(best[1]) ? [xv, d] : best; }, [xs[0], 0]);
+      host.append(h('p', { class: 'chart-cap gap' }, far[1] === 0 ? 'The two paths are identical.' : `Largest difference (first minus second): ${small(far[1], 4)} at ${xFmt(far[0])}; at the end ${small(gapAt(xs[xs.length - 1]) ?? 0, 4)}.`));
+    }
   }, { tall: true });
   return host;
 }

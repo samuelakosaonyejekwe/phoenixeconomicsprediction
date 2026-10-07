@@ -35,6 +35,15 @@ export const clear = el => { while (el.firstChild) el.firstChild.remove(); retur
 
 // Number formatting.
 const nf = new Map();
+// A small effect is not printed as zero: a value that would round to 0 at `d` decimals is shown to its
+// first two significant digits instead (−0.000042 rather than 0.0000); an exact zero is 0.
+export function small(v, d = 4) {
+  if (v === null || v === undefined || Number.isNaN(v)) return '–';
+  const a = Math.abs(v);
+  if (a < 1e-12) return '0';
+  return a >= 0.5 * 10 ** -d ? num(v, d) : num(v, Math.min(12, Math.ceil(-Math.log10(a)) + 1));
+}
+
 export function num(v, d = 1) {
   if (v === null || v === undefined || Number.isNaN(v)) return '–';
   // A value that rounds to zero is shown as 0, not as −0.
@@ -67,6 +76,7 @@ export const dateTime = iso => (iso ? new Date(iso).toLocaleString(undefined, { 
 const P = {
   home: 'M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z',
   back: 'M15 5l-7 7 7 7',
+  arrow: 'M19 12H5M11 6l-6 6 6 6',
   radar: 'M12 12m-9 0a9 9 0 1 0 18 0a9 9 0 1 0-18 0M12 12m-5 0a5 5 0 1 0 10 0a5 5 0 1 0-10 0M12 12l6-6',
   play: 'M7 4v16l13-8z',
   flow: 'M4 7h12l-3-3M20 17H8l3 3M4 7v0M20 17v0',

@@ -323,7 +323,7 @@ function stepCells(X, t, k, log) {
       tot.absorbed += Phi[i] * dt; X.cumAbs[i] += Phi[i] * dt;
       tot.premium += prem * dt; tot.released += rel * dt; tot.matured += mat * dt; tot.spent += cons * dt;
     }
-    log(i, recall);
+    if (log) log(i, recall);
   }
 }
 
@@ -417,7 +417,8 @@ export function simulate(cells, P, scenario = {}, opts = {}) {
     stepFlux(X);
     stepNeed(X);
     stepTransfers(X);
-    stepCells(X, t, k, log);
+    // opts.quiet: the list of contract events is not built (a stress test reads only the aggregates).
+    stepCells(X, t, k, opts.quiet ? null : log);
     if (k === nextRec || k === X.steps) {
       if (k === nextRec) { recN++; nextRec = Math.round(recN * 0.25 / dt); }
       rec.t.push(+t.toFixed(4));

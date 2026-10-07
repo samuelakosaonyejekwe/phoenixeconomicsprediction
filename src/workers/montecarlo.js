@@ -2,6 +2,7 @@
 // inflation-trend and inflow shocks, each run solved with and without Phoenix under the same
 // shocks, summarised as percentile fans and paired differences.
 import { simulate, prepare } from '../model/engine.js';
+import { summarise } from '../model/mcsummary.js';
 
 function rng(seed) {
   return () => {
@@ -13,15 +14,17 @@ function rng(seed) {
 }
 function chol(A) { const n = A.length, L = A.map(() => new Array(n).fill(0)); for (let i = 0; i < n; i++) for (let j = 0; j <= i; j++) { let s = A[i][j]; for (let k = 0; k < j; k++) s -= L[i][k] * L[j][k]; L[i][j] = i === j ? Math.sqrt(Math.max(s, 1e-12)) : s / L[j][j]; } return L; }
 const gauss = r => Math.sqrt(-2 * Math.log(1 - r())) * Math.cos(2 * Math.PI * r());
-const q = (arr, p) => { const a = [...arr].sort((x, y) => x - y); const i = (a.length - 1) * p, lo = Math.floor(i); return a[lo] + (a[Math.min(a.length - 1, lo + 1)] - a[lo]) * (i - lo); };
 
 self.onmessage = ({ data }) => {
-  const { cells, P, scenario, runs, seed, market, oilYoy, paramUncertainty = true, est = null, kStanceAlt = null } = data;
+  // Runs `from` to `to` of `runs`: several workers share one stress test, each run with its own random
+  // stream so that the result does not depend on how the runs are shared out. With `raw` each run is
+  // sent as it finishes, for the page to merge; otherwise the runs are summarised here.
+  const { cells, P, scenario, runs, seed, market, oilYoy, paramUncertainty = true, est = null, kStanceAlt = null, from = 0, to = runs, raw = false, phase = 0 } = data;
   const oil = oilYoy ? { yoy: oilYoy, at: t => { const k = Math.min(oilYoy.length - 1, Math.max(0, Math.floor(t))), k1 = Math.min(oilYoy.length - 1, k + 1); return oilYoy[k] + (oilYoy[k1] - oilYoy[k]) * (t - Math.floor(t)); } } : null;
-  const r = rng(seed || 7);
   const prep = prepare(cells, P, scenario);
   const out = { on: [], off: [] };
-  for (let k = 0; k < runs; k++) {
+  for (let k = from; k < to; k++) {
+    const r = rng((seed || 7) + 7919 * (k + 1));
     const common = gauss(r) * 0.06;
     const perturb = { noise: cells.map(() => common + gauss(r) * 0.06), inj: cells.map(() => Math.exp(gauss(r) * 0.35)) };
     // Parameter uncertainty (§7.7): estimated parameters from their sampling distributions,
@@ -46,19 +49,16 @@ self.onmessage = ({ data }) => {
       ...(structure === 2 ? { kappaPC: 0.25 } : {}), // steep curve of tight labour markets
       ...(structure === 3 ? { aPanel: Math.max(0.05, (est?.aAnnual ?? P.aPanel) * 0.5) } : {}), // weaker anchoring
     } : P;
-    for (const phx of [true, false]) {
-      const res = simulate(cells, Q, scenario, { prep, phx, perturb, market, oil });
+    // The run without Phoenix is also the baseline that the run with Phoenix needs for the market rate
+    // path (the engine would otherwise solve it a second time); the result is the same.
+    const needsBase = Q.rateMode !== 'taylor' && market?.curve?.length;
+    const without = simulate(cells, Q, scenario, { prep, phx: false, perturb, market, oil, wantBase: !!needsBase, quiet: true });
+    const withPhx = simulate(cells, Q, scenario, { prep, phx: true, perturb, market, oil, quiet: true, ...(needsBase ? { base: without.baseArrays } : {}) });
+    for (const [phx, res] of [[true, withPhx], [false, without]]) {
       out[phx ? 'on' : 'off'].push({ pi: res.agg.map(a => a.pi), S: res.agg.map(a => a.S), i: res.agg.at(-1).i, x: res.agg.at(-1).x, Scrit: res.agg.at(-1).Scrit, absorbed: res.totals.absorbed, residual: Math.abs(res.totals.residual), pi12: res.agg.find(a => a.t >= 12 - 1e-9)?.pi });
     }
-    if (k % 10 === 9) self.postMessage({ progress: (k + 1) / runs });
+    if (raw) self.postMessage({ run: k, on: out.on.pop(), off: out.off.pop(), phase }); else self.postMessage({ progress: (k + 1 - from) / (to - from) });
   }
   const t = simulate(cells, P, scenario, { prep, phx: true, market, oil }).agg.map(a => a.t);
-  const fan = (list, key) => t.map((_, i) => { const v = list.map(x => x[key][i]); return [q(v, 0.1), q(v, 0.5), q(v, 0.9)]; });
-  const hit = list => list.filter(x => x.pi[x.pi.length - 1] <= P.target + 0.25).length / list.length;
-  const below = list => list.filter(x => x.S[x.S.length - 1] <= x.Scrit).length / list.length;
-  const dPi12 = out.on.map((x, k) => x.pi12 - out.off[k].pi12);
-  const dX = out.on.map((x, k) => x.x - out.off[k].x);
-  const dPi = out.on.map((x, k) => x.pi[x.pi.length - 1] - out.off[k].pi[out.off[k].pi.length - 1]);
-  const dI = out.on.map((x, k) => x.i - out.off[k].i);
-  self.postMessage({ done: true, dPi12: [q(dPi12, 0.1), q(dPi12, 0.5), q(dPi12, 0.9)], dX: [q(dX, 0.1), q(dX, 0.5), q(dX, 0.9)], dPi: [q(dPi, 0.1), q(dPi, 0.5), q(dPi, 0.9)], dPiRange: [Math.min(...dPi), Math.max(...dPi)], dI: [q(dI, 0.1), q(dI, 0.5), q(dI, 0.9)], belowOn: below(out.on), belowOff: below(out.off), t, piOn: fan(out.on, 'pi'), piOff: fan(out.off, 'pi'), SOn: fan(out.on, 'S'), SOff: fan(out.off, 'S'), hitOn: hit(out.on), hitOff: hit(out.off), absorbed: [q(out.on.map(x => x.absorbed), 0.1), q(out.on.map(x => x.absorbed), 0.5), q(out.on.map(x => x.absorbed), 0.9)], maxResidual: Math.max(...out.on.map(x => x.residual), ...out.off.map(x => x.residual)), runs });
+  self.postMessage(raw ? { end: true, t, phase } : summarise(out.on, out.off, t, P));
 };

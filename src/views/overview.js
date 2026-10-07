@@ -1,4 +1,4 @@
-import { h, num, eur, pct } from '../ui/dom.js';
+import { h, num, eur, pct, small } from '../ui/dom.js';
 import { card, lineChart, tileMap, dotMap, SERIES, seqColor, divColor, legendEl, sparkline } from '../ui/charts.js';
 import { marketDrivers } from '../model/nowcast.js';
 import { LOOP } from '../content/framework.js';
@@ -53,7 +53,7 @@ export function overview(root, app) {
       h('div', { class: 'state-strip' }, ['ACTIVE', 'ARMED', 'WATCH', 'DORMANT'].map(k => h('a', { href: '#/contracts', class: 'state-pill' }, badge(k), h('b', null, count(k)))))),
     h('div', { class: 'hero-fig' }, h('span', null, 'Projected inflation in ', String(P.months), ' months', SCENARIOS[app.scenario].referenceCase ? ` · ${SCENARIOS[app.scenario].label}` : SCENARIOS[app.scenario].shock ? ` · ${SCENARIOS[app.scenario].label}` : ''),
       h('b', null, end ? pct(end.pi, 1) : '–'),
-      h('span', { class: 'muted' }, endB ? `${pct(endB.pi, 2)} without Phoenix (${num(end.pi - endB.pi, 4)} pp)` : '')));
+      h('span', { class: 'muted' }, endB ? `${pct(endB.pi, 2)} without Phoenix (${small(end.pi - endB.pi, 4)} pp)` : '')));
 
   const kpis = h('div', { class: 'kpis' },
     kpi({ label: P.nowcast && ncAsOf ? `Weighted inflation, nowcast ${ncAsOf}` : 'Weighted inflation', value: pct(piW, 2), sub: P.nowcast && ncAsOf ? `Official ${pct(piOff, 2)}, ${cells[0].piPeriod.replace(/[()]/g, '')}` : `Official, ${cells[0].piPeriod.replace(/[()]/g, '')}`, delta: `${num(piW - P.target, 2)} pp vs target`, good: piW <= P.target }),

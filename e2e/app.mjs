@@ -50,6 +50,39 @@ const PUBLISHERS = /ec\.europa\.eu|data-api\.ecb\.europa\.eu|api\.worldbank\.org
 page.on('response', r => { if (r.url().startsWith(base) && r.status() >= 400) errors.push(`${r.status()} ${r.url()}`); });
 page.on('console', m => { const t = m.text(); if (m.type() === 'error' && !/Failed to load resource|net::ERR_/.test(t) && !(/blocked by CORS policy/.test(t) && PUBLISHERS.test(t))) errors.push(t); });
 
+// The layout holds in every state of a page: no card lies over another, nothing spills out of its card,
+// no card is left mostly empty and the page does not scroll sideways.
+const layout = () => page.evaluate(() => {
+  const out = [], name = c => (c.querySelector('h3')?.firstChild?.textContent || c.className).slice(0, 40);
+  const cards = [...document.querySelectorAll('main .card')].filter(c => c.offsetParent !== null);
+  const rects = cards.map(c => c.getBoundingClientRect());
+  cards.forEach((a, i) => {
+    for (let j = i + 1; j < cards.length; j++) {
+      if (a.contains(cards[j]) || cards[j].contains(a)) continue;
+      const p = rects[i], q = rects[j], w = Math.min(p.right, q.right) - Math.max(p.left, q.left), h = Math.min(p.bottom, q.bottom) - Math.max(p.top, q.top);
+      if (w > 2 && h > 2) out.push(`"${name(a)}" lies over "${name(cards[j])}" by ${Math.round(h)}px`);
+    }
+    let bottom = rects[i].top;
+    const walk = document.createTreeWalker(a, NodeFilter.SHOW_ELEMENT);
+    for (let n; (n = walk.nextNode());) {
+      if (n.children.length && !/^(svg|canvas|img|input|select|button|table)$/i.test(n.tagName) && ![...n.childNodes].some(t => t.nodeType === 3 && t.textContent.trim())) continue;
+      const q = n.getBoundingClientRect();
+      // Not what scrolls inside its own region, nor the folded part of an explanation.
+      let inside = false;
+      for (let p = n.parentElement; p && p !== a && !inside; p = p.parentElement) inside = (p.scrollHeight > p.clientHeight + 4 && getComputedStyle(p).overflowY !== 'visible') || p.hidden || (p.tagName === 'DETAILS' && !p.open && !n.closest('summary'));
+      if (q.height && q.width && !inside) bottom = Math.max(bottom, q.bottom);
+    }
+    if (bottom - rects[i].bottom > 4) out.push(`"${name(a)}" spills ${Math.round(bottom - rects[i].bottom)}px below its card`);
+    if (rects[i].bottom - bottom > 200 && ![...a.querySelectorAll('*')].some(e => e.scrollHeight > e.clientHeight + 4 && getComputedStyle(e).overflowY !== 'visible')) out.push(`"${name(a)}" is empty for ${Math.round(rects[i].bottom - bottom)}px`);
+  });
+  const over = document.documentElement.scrollWidth - document.documentElement.clientWidth;
+  if (over > 1) out.push(`the page is ${over}px wider than the window`);
+  return out;
+});
+let states = 0;
+// The arrangement follows a change within about half a second; it is given three seconds.
+const checkLayout = async (r, state) => { states++; let bad = await layout(); for (let k = 0; k < 4 && bad.length; k++) { await page.waitForTimeout(700); bad = await layout(); } if (bad.length) fail(`page ${r}, ${state}: ${bad.slice(0, 4).join('; ')}`); };
+
 await page.goto(base + '#/overview');
 await page.waitForSelector('.kpis', { timeout: 120000 });
 for (const r of ['overview', 'detect', 'simulate', 'redistribute', 'contracts', 'forecast', 'stability', 'pilot', 'framework', 'signals', 'markets', 'programmes', 'governance', 'validate', 'data', 'guide']) {
@@ -82,8 +115,22 @@ for (const r of ['overview', 'detect', 'simulate', 'redistribute', 'contracts', 
     for (let k = 0; k < 10 && !shown; k++) { shown = await page.locator('.tip.tip-note').evaluate(e => getComputedStyle(e).display !== 'none' && e.textContent.length > 10).catch(() => false); if (!shown) await page.waitForTimeout(200); }
     if (!shown) fail(`page ${r}: hovering a card title shows no explanation`);
   }
+  // Every state the page can be put in: each choice of a segmented control, and each table view opened
+  // and closed again.
+  await checkLayout(r, 'as opened');
+  for (const sel of ['main .seg button', 'main .card-a .chip[aria-pressed]']) {
+    for (let k = 0; k < await page.locator(sel).count(); k++) {
+      const b = page.locator(sel).nth(k);
+      if (!(await b.isVisible().catch(() => false))) continue;
+      const label = `${(await b.textContent()).trim()} #${k + 1}`;
+      await b.click(); await page.waitForTimeout(900);
+      await checkLayout(r, `after "${label}"`);
+      if (sel.includes('chip')) { await page.locator(`${sel}[aria-pressed="true"]`).first().click().catch(() => {}); await page.waitForTimeout(700); await checkLayout(r, `after closing "${label}"`); }
+    }
+  }
   console.log('ok page', r);
 }
+console.log(`ok layout in ${states} page states`);
 
 // The audit ledger: the device key is registered and anchored at start-up, and verification checks every
 // link, hash and signature and finds the anchor.

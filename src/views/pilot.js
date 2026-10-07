@@ -1,4 +1,4 @@
-import { h, icon, num, pct, download, toast } from '../ui/dom.js';
+import { h, icon, num, pct, download, toast, small } from '../ui/dom.js';
 import { card, lineChart, SERIES, dataTable } from '../ui/charts.js';
 import { simulate } from '../model/engine.js';
 import { referenceCell } from '../model/inputs.js';
@@ -22,7 +22,7 @@ function implied(app, P, delta) {
   const b = simulate([cell], Q, SCENARIOS.episode, { phx: false, market }).agg.at(-1);
   return { dpi: a.pi - b.pi, di: a.i - b.i, phiSel: Q.phiSel };
 }
-const fx4 = r => (r ? `${num(r.dpi, 4)} pp` : 'loading…');
+const fx4 = r => (r ? `${small(r.dpi, 4)} pp` : 'loading…');
 
 export function pilot(root, app) {
   if (!app.cells.length) return root.append(pageHead('Pilot planner'), empty());

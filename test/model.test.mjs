@@ -113,3 +113,17 @@ test('the ledger detects edits and checks Rekor anchors without trusting the anc
   chain[1].indicators.pi = 9;
   assert.equal((await verify(chain, { rekor: null })).ok, false);
 });
+
+test('a stress-test run reuses its no-Phoenix run as the baseline and builds no events, with the same result (§7.7)', () => {
+  const cells = Array.from({ length: 4 }, (_, i) => ({ ...CELL, id: `C${i}`, lat: 44 + 3 * i, lon: 4 * i, pi: 2.5 + 1.5 * i, gdp: 400 + 300 * i }));
+  const market = { curve: [[0, 2.5], [6, 2.7], [12, 2.9], [24, 3.1]] }, perturb = { noise: cells.map((_, i) => 0.03 * (i - 1)), inj: cells.map((_, i) => 1 + 0.1 * i) };
+  const plainOn = simulate(cells, DEFAULTS, SCENARIOS.live, { phx: true, perturb, market });
+  const plainOff = simulate(cells, DEFAULTS, SCENARIOS.live, { phx: false, perturb, market });
+  const off = simulate(cells, DEFAULTS, SCENARIOS.live, { phx: false, perturb, market, wantBase: true, quiet: true });
+  const on = simulate(cells, DEFAULTS, SCENARIOS.live, { phx: true, perturb, market, base: off.baseArrays, quiet: true });
+  assert.deepEqual(on.agg, plainOn.agg);
+  assert.deepEqual(off.agg, plainOff.agg);
+  assert.deepEqual(on.totals, plainOn.totals);
+  assert.ok(plainOn.events.length > 0 && on.events.length === 0);
+  assert.ok(Math.abs(plainOn.agg.at(-1).pi - plainOff.agg.at(-1).pi) > 0, 'the market path makes the two runs differ');
+});

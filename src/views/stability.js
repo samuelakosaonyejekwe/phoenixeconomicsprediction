@@ -1,4 +1,4 @@
-import { h, num, pct } from '../ui/dom.js';
+import { h, num, pct, small } from '../ui/dom.js';
 import { card, lineChart, SERIES, stackedBars } from '../ui/charts.js';
 import { pageHead, explain, empty, objectiveChips, kpi, sourceLine } from './common.js';
 
@@ -26,16 +26,16 @@ export function stability(root, app) {
   const tF = v => `m${num(v, 0)}`;
   const pair = (title, sub, key, fmt, refs = []) => card({
     title, sub, legend: [{ label: 'With Phoenix', color: SERIES[0], line: true }, { label: 'Without', color: SERIES[1], line: true, dash: true }],
-    body: lineChart({ series: [{ name: 'With Phoenix', color: SERIES[0], values: sim.agg.map(a => [a.t, a[key]]) }, { name: 'Without', color: SERIES[1], dash: true, values: base.agg.map(a => [a.t, a[key]]) }], refs, yFmt: fmt, xFmt: tF }),
+    body: lineChart({ series: [{ name: 'With Phoenix', color: SERIES[0], values: sim.agg.map(a => [a.t, a[key]]) }, { name: 'Without', color: SERIES[1], dash: true, values: base.agg.map(a => [a.t, a[key]]) }], refs, yFmt: fmt, gap: true, xFmt: tF }),
     table: () => ({ cols: ['Month', 'With', 'Without', 'Difference'], rows: sim.agg.filter((_, i) => i % 4 === 0).map((a, i) => [num(a.t, 0), fmt(a[key]), fmt(base.agg[i * 4][key]), num(a[key] - base.agg[i * 4][key], 5)]) }),
   });
 
   root.append(
     pageHead('Stability & feedback', 'The disorder index, the demand and policy-rate response, and the feedback loop that retunes contracts as conditions change (Solutions §4.8–4.12, §8).'),
     h('div', { class: 'kpis' },
-      kpi({ label: `Disorder index at m${P.months}`, value: num(end.D, 2), delta: `${num(end.D - endB.D, 2)} vs no Phoenix`, good: end.D <= endB.D, sub: `now ${num(sim.agg[0].D, 2)}` }),
-      kpi({ label: `Output gap at m${P.months}`, value: `${num(end.x, 2)}%`, sub: `${num(endB.x, 2)}% without Phoenix (${num(end.x - endB.x, 3)} pp)` }),
-      kpi({ label: `Policy rate at m${P.months}`, value: pct(end.i, 2), sub: `${pct(endB.i, 2)} without Phoenix (${num(end.i - endB.i, 3)} pp)` }),
+      kpi({ label: `Disorder index at m${P.months}`, value: num(end.D, 2), delta: `${small(end.D - endB.D, 2)} vs no Phoenix`, good: end.D <= endB.D, sub: `now ${num(sim.agg[0].D, 2)}` }),
+      kpi({ label: `Output gap at m${P.months}`, value: `${num(end.x, 2)}%`, sub: `${num(endB.x, 2)}% without Phoenix (${small(end.x - endB.x, 3)} pp)` }),
+      kpi({ label: `Policy rate at m${P.months}`, value: pct(end.i, 2), sub: `${pct(endB.i, 2)} without Phoenix (${small(end.i - endB.i, 3)} pp)` }),
       kpi({ label: 'Live inflation dispersion', value: hist.length ? num(hist.at(-1).var, 2) : '–', sub: hist.length ? `Var(π) across economies, ${hist.at(-1).p}` : 'Monthly data needed' }),
       kpi({ label: 'Recall activity', value: recalled > 0 ? 'Engaged' : 'Idle', sub: `Saturation threshold ${P.recallAt}` })),
     h('div', { class: 'grid-2' },

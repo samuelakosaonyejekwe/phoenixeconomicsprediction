@@ -1,15 +1,60 @@
-import { h, icon, num, eur, pct, download, toast } from '../ui/dom.js';
+import { h, icon, num, eur, pct, download, toast, small } from '../ui/dom.js';
 import { card, lineChart, SERIES, tileMap, dotMap, divColor, seqColor, inkOn } from '../ui/charts.js';
 import { PARAM_GROUPS, SCENARIOS } from '../model/params.js';
 import { optimiseKA } from '../model/engine.js';
+import { summarise } from '../model/mcsummary.js';
 import { context } from '../model/inputs.js';
 import { paperResults } from '../data/paper.js';
 import { pageHead, explain, kpi, empty, objectiveChips, openCountry } from './common.js';
 import { slider } from './controls.js';
 
-let frame = null, field = 'pi', playing = null, openGroup = 'absorb', mcResult = null, mcKey = '', mcRun = null, mcBtnRef = null;
+let frame = null, field = 'pi', playing = null, openGroup = 'absorb', mcResult = null, mcKey = '', mcRun = null, mcBtnRef = null, mcShown = '', mcWant = '', mcWarm = 0, mcDraw = null;
 // The k_A search result survives redraws (data refreshes, status updates) while its inputs are unchanged.
 let kaResult = null, kaKey = '', kaBusy = '', kaData = '', kaTimer = 0, kaReveal = false, mcReveal = false, mcData = '';
+// The stress test runs on every processor core at once: its runs are shared among workers and merged
+// here. It lives at module level so that a page redraw (a live-data refresh) never loses a run in
+// progress or its result.
+const MC_RUNS = 200;
+const mcWorker = () => (globalThis.PHX_MC_SRC ? new Worker(URL.createObjectURL(new Blob([globalThis.PHX_MC_SRC], { type: 'text/javascript' }))) : new Worker(new URL('mc.js', document.baseURI)));
+function stopMC(app) {
+  if (!mcRun) return;
+  for (const w of mcRun.workers) w.terminate();
+  mcRun = null; app.busy--;
+}
+function startMC(app, key, job, paint) {
+  stopMC(app);
+  const n = Math.max(1, Math.min(8, navigator.hardwareConcurrency || 4, MC_RUNS));
+  const phase = () => ({ on: {}, off: {}, ticks: 0, ended: 0, t: null });
+  const run = mcRun = { key, data: app.dataStamp, progress: 0, drawn: 0, phases: [phase(), phase()], workers: [] };
+  app.busy = (app.busy || 0) + 1;
+  const fail = () => { if (mcRun !== run) return; stopMC(app); mcReveal = false; if (mcShown === key) { mcShown = ''; toast('Stress test could not start in this browser.'); app.rerender(); } };
+  for (let i = 0; i < n; i++) {
+    let w;
+    try { w = mcWorker(); } catch { return fail(); }
+    run.workers.push(w);
+    w.onerror = fail;
+    w.onmessage = ({ data }) => {
+      if (mcRun !== run) return;
+      const ph = run.phases[data.phase];
+      if (data.end) { ph.t = data.t; ph.ended++; } else { ph.on[data.run] = data.on; ph.off[data.run] = data.off; ph.ticks++; }
+      const [quick, exact] = run.phases, done = exact.ended === n;
+      run.progress = (0.2 * quick.ticks + 0.8 * exact.ticks) / MC_RUNS;
+      // Two passes. A quick one at a four-times coarser time step gives the whole picture in a fraction
+      // of the time and is shown as it fills in; the exact one, at the model's own step, then replaces it.
+      const quickDone = data.end && data.phase === 0 && quick.ended === n;
+      if (!done && !quickDone && (quick.ended === n || quick.ticks < 8 || performance.now() - run.drawn < 450)) { paint(); return; }
+      const src = done ? exact : quick, ks = Object.keys(src.on).filter(k => src.off[k]).sort((a, b) => a - b);
+      mcResult = { ...summarise(ks.map(k => src.on[k]), ks.map(k => src.off[k]), src.t || src.on[ks[0]].pi.map((_, i) => i * 0.25), job.P), partial: done ? 0 : ks.length, quick: !done };
+      mcKey = run.key; mcData = run.data; run.drawn = performance.now();
+      if (done) stopMC(app);
+      if (mcShown === key) { if (done || !mcDraw?.()) app.rerender(); else paint(); }
+    };
+    const share = { runs: MC_RUNS, from: Math.floor(i * MC_RUNS / n), to: Math.floor((i + 1) * MC_RUNS / n), raw: true };
+    w.postMessage({ ...job, ...share, phase: 0, P: { ...job.P, dt: Math.min(0.25, job.P.dt * 4) } });
+    w.postMessage({ ...job, ...share, phase: 1 });
+  }
+}
+
 // A result asked for with a button is brought into view and marked when it arrives, and again once
 // the cards around it have taken their places.
 function reveal(el) {
@@ -56,7 +101,7 @@ export function simulate(root, app) {
   const tF = v => `m${num(v, v % 1 ? 1 : 0)}`;
   const two = (title, sub, a, b, key, fmt, refs = [], names = ['With Phoenix', 'Without Phoenix']) => card({
     title, sub, legend: [{ label: names[0], color: SERIES[0], line: true }, { label: names[1], color: SERIES[1], line: true, dash: true }],
-    body: lineChart({ series: [{ name: names[0], color: SERIES[0], values: a.map(x => [x.t, key(x)]) }, { name: names[1], color: SERIES[1], dash: true, values: b.map(x => [x.t, key(x)]) }], refs, yFmt: fmt, xFmt: tF, height: 200 }),
+    body: lineChart({ series: [{ name: names[0], color: SERIES[0], values: a.map(x => [x.t, key(x)]) }, { name: names[1], color: SERIES[1], dash: true, values: b.map(x => [x.t, key(x)]) }], refs, yFmt: fmt, xFmt: tF, height: 200, gap: true }),
     table: () => ({ cols: ['Month', names[0], names[1]], rows: a.filter((_, i) => i % 4 === 0).map((x, i) => [num(x.t, 0), fmt(key(x)), fmt(key(b[i * 4]))]) }),
   });
   const one = (title, sub, list, fmt, refs = []) => card({
@@ -108,7 +153,7 @@ export function simulate(root, app) {
   const noPhx = { 'Government spending rate 0.2': app.sim(false, { sdGov: 0.2 }), 'Steep Phillips curve κ = 0.25 (tight labour markets)': app.sim(false, { kappaPC: 0.25 }) };
   const regimeTable = h('div', { class: 'tbl-wrap' }, h('table', { class: 'tbl' },
     h('thead', null, h('tr', null, ['Regime', `π at m${P.months}`, 'Δπ vs no Phoenix, pp', `Policy rate at m${P.months}`, `Excess stock at m${P.months}`, 'Absorbed', `Disorder at m${P.months}`].map(c => h('th', { scope: 'col' }, c)))),
-    h('tbody', null, regimes.map(([name, r]) => { const e = r.agg.at(-1), b = (noPhx[name] || base).agg.at(-1); return h('tr', null, h('th', { scope: 'row' }, name), h('td', null, pct(e.pi, 2)), h('td', null, num(e.pi - b.pi, 4)), h('td', null, pct(e.i, 2)), h('td', null, eur(e.S, 1)), h('td', null, eur(r.totals.absorbed, 1)), h('td', null, num(e.D, 2))); }))));
+    h('tbody', null, regimes.map(([name, r]) => { const e = r.agg.at(-1), b = (noPhx[name] || base).agg.at(-1); return h('tr', null, h('th', { scope: 'row' }, name), h('td', null, pct(e.pi, 2)), h('td', null, small(e.pi - b.pi, 4)), h('td', null, pct(e.i, 2)), h('td', null, eur(e.S, 1)), h('td', null, eur(r.totals.absorbed, 1)), h('td', null, num(e.D, 2))); }))));
 
   // Optimiser: k_A feasibility, economy by economy (§4.3–4.4).
   const optIntro = h('p', { class: 'sub' }, `Finds the economies that would still hold an exceptional stock (above their own S_crit) at month ${P.months} without absorption, the smallest absorption speed k_A that brings each of them down to its threshold, and what stops the others. The loss-minimising policy over all levers is in Solutions §7.6 (Table 15).`);
@@ -164,40 +209,52 @@ export function simulate(root, app) {
   if (key !== mcKey) mcResult = null;
   const mcHost = h('div', { class: 'mc-result' });
   const drawMC = () => {
-    if (!mcResult) { mcHost.replaceChildren(h('p', { class: 'sub' }, '200 randomised runs, as in the paper, with shocks to the inflation trend and to new inflows, correlated draws of the estimated Phillips parameters, published ranges for the behavioural parameters and four model structures, each solved with and without Phoenix under the same draws (Solutions §7.7).')); return; }
+    if (!mcResult || mcShown !== key) { mcHost.replaceChildren(h('p', { class: 'sub' }, '200 randomised runs, as in the paper, with shocks to the inflation trend and to new inflows, correlated draws of the estimated Phillips parameters, published ranges for the behavioural parameters and four model structures, each solved with and without Phoenix under the same draws (Solutions §7.7).')); return; }
     const m = mcResult;
     mcHost.replaceChildren(
       h('div', { class: 'kpis' },
-        kpi({ label: 'Phoenix effect on inflation (p10 – p90)', value: `${num(m.dPi[0], 4)} – ${num(m.dPi[2], 4)} pp`, sub: `median ${num(m.dPi[1], 4)} pp` }),
+        kpi({ label: 'Phoenix effect on inflation (p10 – p90)', value: `${small(m.dPi[0], 4)} – ${small(m.dPi[2], 4)} pp`, sub: `median ${small(m.dPi[1], 4)} pp` }),
         kpi({ label: 'Runs ending with the stock below S_crit', value: `${num(m.belowOn * 100, 0)}%`, sub: `${num(m.belowOff * 100, 0)}% without Phoenix` }),
         kpi({ label: 'Absorbed (p10 – p90)', value: `${eur(m.absorbed[0], 0)} – ${eur(m.absorbed[2], 0)}`, sub: `median ${eur(m.absorbed[1], 1)}` })),
       lineChart({
         series: [{ name: 'Median with Phoenix', color: SERIES[0], values: m.t.map((t, i) => [t, m.piOn[i][1]]) }, { name: 'Median without', color: SERIES[1], dash: true, values: m.t.map((t, i) => [t, m.piOff[i][1]]) }],
         bands: [{ color: SERIES[0], values: m.t.map((t, i) => [t, m.piOn[i][0], m.piOn[i][2]]) }, { color: SERIES[1], values: m.t.map((t, i) => [t, m.piOff[i][0], m.piOff[i][2]]), opacity: 0.1 }],
         refs: [{ y: P.target, label: `Target ${P.target}%` }], yFmt: v => `${num(v, 1)}%`, xFmt: tF, height: 220 }),
+      m.quick ? h('p', { class: 'sub', role: 'status' }, `Quick pass at a four-times coarser time step (${m.partial} of ${MC_RUNS} runs${m.partial < MC_RUNS ? ' so far' : ''}); the exact figures, at the model’s own step, replace it when they are ready.`) : null,
       mcData !== app.dataStamp ? h('p', { class: 'sub' }, 'Newer data have arrived since this run; run it again to include them.') : null);
   };
   drawMC();
-  if (mcResult && mcReveal) { mcReveal = false; reveal(mcHost); }
-  // The stress test lives at module level so a page re-render (e.g. a live-data refresh)
-  // never loses a run in progress or its result.
-  const mcLabel = () => mcRun ? `Running… ${Math.round(mcRun.progress * 100)}%` : mcResult ? 'Re-run' : 'Run stress test';
-  const mcBtn = h('button', { class: 'btn', disabled: !!mcRun, onclick: async () => {
-    if (mcRun) return;
-    mcReveal = true;
+  // While runs are still arriving only this card is redrawn, not the page.
+  mcDraw = () => { if (!mcHost.isConnected || mcWant !== key) return false; const first = !mcHost.querySelector('.kpis'); drawMC(); if (first && mcReveal) { mcReveal = false; reveal(mcHost); } return true; };
+  if (mcResult && mcShown === key && mcReveal) { mcReveal = false; reveal(mcHost); }
+  const shown = mcShown === key, running = !!mcRun && mcRun.key === key;
+  const mcLabel = () => (mcShown === key && mcRun?.key === key ? `Running… ${Math.round(mcRun.progress * 100)}%` : mcShown === key && mcResult ? 'Re-run' : 'Run stress test');
+  const paint = () => { if (mcBtnRef?.isConnected) { const busy = mcShown === mcWant && mcRun?.key === mcWant; mcBtnRef.disabled = busy; mcBtnRef.replaceChildren(icon(busy ? 'layers' : mcShown === mcWant && mcResult ? 'refresh' : 'layers', 16), busy ? `Running… ${Math.round(mcRun.progress * 100)}%` : mcShown === mcWant && mcResult ? 'Re-run' : 'Run stress test'); } };
+  const launch = async () => {
     // The stance structure uses the paper's calibrated k_z (§5.3, §7.7).
     const published = await paperResults();
-    const w = globalThis.PHX_MC_SRC ? new Worker(URL.createObjectURL(new Blob([globalThis.PHX_MC_SRC], { type: 'text/javascript' }))) : new Worker(new URL('mc.js', document.baseURI));
-    mcRun = { progress: 0, key, data: app.dataStamp }; app.busy = (app.busy || 0) + 1;
-    const paint = () => { if (mcBtnRef) { mcBtnRef.disabled = !!mcRun; mcBtnRef.replaceChildren(icon(mcRun ? 'layers' : 'refresh', 16), mcLabel()); } };
+    if (mcWant !== key || mcRun?.key === key) return;
+    startMC(app, key, { cells, P, scenario: SCENARIOS[app.scenario], seed: Date.now() % 100000, market: app.marketPath(), est: (() => { try { return context(app.data, P).phillips; } catch { return null; } })(), kStanceAlt: published?.transmission?.kCalibrated ?? null }, paint);
     paint();
-    w.onmessage = ({ data }) => {
-      if (data.progress) { mcRun.progress = data.progress; paint(); return; }
-      mcResult = data; mcKey = mcRun.key; mcData = mcRun.data; mcRun = null; app.busy--; w.terminate(); app.rerender();
-    };
-    w.onerror = () => { mcReveal = false; mcRun = null; app.busy--; paint(); toast('Stress test could not start in this browser.'); };
-    w.postMessage({ cells, P, scenario: SCENARIOS[app.scenario], runs: 200, seed: Date.now() % 100000, market: app.marketPath(), est: (() => { try { return context(app.data, P).phillips; } catch { return null; } })(), kStanceAlt: published?.transmission?.kCalibrated ?? null });
-  } }, icon('layers', 16), mcLabel());
+  };
+  // A run for another region, scenario or parameter set is abandoned. The test for the settings now on
+  // screen is started ahead of the button once they have rested a moment, so that pressing it shows
+  // the result at once.
+  mcWant = key;
+  if (mcRun && mcRun.key !== key) stopMC(app);
+  clearTimeout(mcWarm);
+  if (!(mcResult && !mcResult.quick) && !mcRun && root.isConnected !== false && (navigator.hardwareConcurrency || 2) >= 4 && !navigator.connection?.saveData)
+    mcWarm = setTimeout(() => { if (mcWant === key && !mcRun && !(mcResult && !mcResult.quick) && location.hash.startsWith('#/simulate') && document.visibilityState === 'visible') launch(); }, 1500);
+  const mcBtn = h('button', { class: 'btn', disabled: shown && running, onclick: () => {
+    if (mcShown === key && mcRun?.key === key) return;
+    const again = mcShown === key && mcResult;
+    mcShown = key; mcReveal = true;
+    if (again) { mcResult = null; mcKey = ''; }
+    if (mcResult && mcKey === key) return app.rerender();
+    if (!mcRun) launch();
+    paint();
+    if (again) app.rerender();
+  } }, icon(shown && !running && mcResult ? 'refresh' : 'layers', 16), mcLabel());
   mcBtnRef = mcBtn;
 
   const exportCsv = () => {
@@ -217,11 +274,11 @@ export function simulate(root, app) {
       h('aside', { class: 'lab-p' }, card({ title: 'Parameters', sub: 'Values from Solutions Table 6. Tags: D estimated from data · L empirical literature · P policy design · M measured by the trials · N numerical', body: groups })),
       h('div', { class: 'lab-r' },
         h('div', { class: 'kpis' },
-          kpi({ label: `Inflation at m${P.months}`, value: pct(end.pi, 2), delta: `${num(end.pi - endB.pi, 4)} pp vs no Phoenix`, good: end.pi <= endB.pi }),
-          kpi({ label: `Policy rate at m${P.months}`, value: pct(end.i, 2), delta: `${num(end.i - endB.i, 4)} pp vs no Phoenix`, good: end.i <= endB.i }),
+          kpi({ label: `Inflation at m${P.months}`, value: pct(end.pi, 2), delta: `${small(end.pi - endB.pi, 4)} pp vs no Phoenix`, good: end.pi <= endB.pi }),
+          kpi({ label: `Policy rate at m${P.months}`, value: pct(end.i, 2), delta: `${small(end.i - endB.i, 4)} pp vs no Phoenix`, good: end.i <= endB.i }),
           kpi({ label: 'Excess stock absorbed', value: eur(sim.totals.absorbed, 1), sub: `${num(sim.totals.absorbed / Math.max(1e-9, sim.agg[0].S) * 100, 1)}% of the initial stock · ${num(end.S / end.Scrit, 2)}× S_crit at m${P.months} (${num(endB.S / endB.Scrit, 2)}× without)` }),
           kpi({ label: 'Months until inflation stays within ±0.3 pp of target', value: firstOnTarget(sim.agg, P.target) === null ? 'not reached' : num(firstOnTarget(sim.agg, P.target), 1), sub: firstOnTarget(base.agg, P.target) === null ? 'not reached without Phoenix' : `${num(firstOnTarget(base.agg, P.target), 1)} without` }),
-          kpi({ label: `Disorder index at m${P.months}`, value: num(end.D, 2), delta: `${num(end.D - endB.D, 2)} vs no Phoenix`, good: end.D <= endB.D }),
+          kpi({ label: `Disorder index at m${P.months}`, value: num(end.D, 2), delta: `${small(end.D - endB.D, 2)} vs no Phoenix`, good: end.D <= endB.D }),
           kpi({ label: 'Conservation check', value: Math.abs(sim.totals.residual) < 1e-6 ? 'Balanced' : eur(sim.totals.residual, 3), sub: 'Absorbed + premiums = credits + wallets + spent + matured + recalled (§4.13)', good: Math.abs(sim.totals.residual) < 1e-6 })),
         card({ title: 'Playback', sub: 'Watch the fields evolve across economies', actions: h('div', { class: 'row' }, fieldSel, playBtn),
           body: h('div', null, mapHost, h('div', { class: 'scrub' }, range, tLabel)) }),

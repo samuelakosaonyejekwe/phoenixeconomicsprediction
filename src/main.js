@@ -80,10 +80,12 @@ const regionSel = h('select', { class: 'region', 'aria-label': 'Region', 'data-t
   Object.entries(REGIONS).map(([k, v]) => h('option', { value: k, selected: app.region === k }, v)));
 const livePill = h('button', { class: 'live', onclick: () => { location.hash = '#/data'; } });
 const searchBtn = h('button', { class: 'icon-btn', 'aria-label': 'Search (Ctrl+K)', onclick: () => palette() }, icon('search'));
-const backBtn = h('button', { class: 'icon-btn back-btn', 'aria-label': 'Back', hidden: true, onclick: () => { if (depth > 0) history.back(); else location.hash = '#/overview'; } }, icon('back'));
-const fwdBtn = h('button', { class: 'icon-btn fwd-btn', 'aria-label': 'Forward', hidden: true, 'data-tip': 'Forward to the page you came back from', onclick: () => history.forward() }, icon('back'));
+// Back and forward, as one control: always there, each dimmed when there is nowhere to go.
+const backBtn = h('button', { class: 'arrow-btn', 'aria-label': 'Back', onclick: () => { if (depth > 0) history.back(); else location.hash = '#/overview'; } }, icon('arrow', 18));
+const fwdBtn = h('button', { class: 'arrow-btn fwd', 'aria-label': 'Forward', 'data-tip': 'Forward to the page you came back from', onclick: () => history.forward() }, icon('arrow', 18));
+const arrows = h('div', { class: 'arrows', role: 'group', 'aria-label': 'Back and forward' }, backBtn, fwdBtn);
 document.getElementById('top').append(
-  backBtn, fwdBtn,
+  arrows,
   h('a', { class: 'brand', href: '#/overview', 'data-tip': 'Phoenix Economics: back to the Overview.' }, h('img', { src: globalThis.PHX_ICON || 'icons/icon.svg', width: 28, height: 28, alt: '' }), h('span', null, 'Phoenix', h('small', null, 'Economics'))),
   h('div', { class: 'top-c' }, regionSel),
   h('div', { class: 'top-r' }, livePill, searchBtn, themeBtn, installBtn));
@@ -112,9 +114,9 @@ try { if (history.state && typeof history.state.phxDepth === 'number') ahead = d
 
 function updateChrome() {
   const atHome = routeOf().id === 'overview';
-  backBtn.hidden = depth === 0 && atHome;
+  backBtn.disabled = depth === 0 && atHome;
   backBtn.dataset.tip = depth > 0 ? 'Back to the previous page' : 'Back to Overview';
-  fwdBtn.hidden = depth >= ahead;
+  fwdBtn.disabled = depth >= ahead;
   const r = routeOf();
   for (const a of [...navLinks, ...bottomLinks, ...moreSheet.querySelectorAll('a')]) { if ((a.dataset.id || a.getAttribute('href').slice(2)) === r.id) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); }
   regionSel.value = app.region;
@@ -130,7 +132,7 @@ function updateChrome() {
 // Previous and next page in the order of the menu, at the foot of every page.
 function pager(r) {
   const i = ROUTES.indexOf(r), link = (to, cls, word) => to && h('a', { class: cls, href: `#/${to.id}`, rel: cls, 'data-tip': `${word} page: ${to.label}.` },
-    h('span', { class: 'pager-i', 'aria-hidden': 'true' }, icon('back', 18)), h('span', { class: 'pager-t' }, h('small', null, word), h('b', null, to.label)));
+    h('span', { class: 'pager-i', 'aria-hidden': 'true' }, icon('arrow', 18)), h('span', { class: 'pager-t' }, h('small', null, word), h('b', null, to.label)));
   const prev = link(ROUTES[i - 1], 'prev', 'Previous'), next = link(ROUTES[i + 1], 'next', 'Next');
   if (next) next.append(next.firstChild);
   return h('nav', { class: 'pager', 'aria-label': 'Previous and next page' }, prev, next);
