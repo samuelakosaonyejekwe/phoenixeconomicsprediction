@@ -21,9 +21,11 @@ function stopMC(app) {
   for (const w of mcRun.workers) w.terminate();
   mcRun = null; app.busy--;
 }
-function startMC(app, key, job, paint) {
+function startMC(app, key, job, paint, ahead = false) {
   stopMC(app);
-  const n = Math.max(1, Math.min(8, navigator.hardwareConcurrency || 4, MC_RUNS));
+  // One core is always left to the page; a run started ahead of the button takes half of them only, so
+  // that the page stays quick while it is being used.
+  const cores = navigator.hardwareConcurrency || 4, n = Math.max(1, Math.min(8, ahead ? Math.floor(cores / 2) : cores - 1));
   const phase = () => ({ on: {}, off: {}, ticks: 0, ended: 0, t: null });
   const run = mcRun = { key, data: app.dataStamp, progress: 0, drawn: 0, phases: [phase(), phase()], workers: [] };
   app.busy = (app.busy || 0) + 1;
@@ -93,9 +95,14 @@ export function simulate(root, app) {
   // Scenario + parameter panel.
   const scen = h('div', { class: 'scen' }, Object.entries(SCENARIOS).map(([k, s]) =>
     h('button', { class: ['scen-b', app.scenario === k && 'on'], 'aria-pressed': String(app.scenario === k), 'data-tip': `${s.desc} Select to start the simulation from this case.`, onclick: () => app.setScenario(k) }, h('b', null, s.label), h('small', null, s.desc))));
-  const groups = h('div', { class: 'acc' }, PARAM_GROUPS.map(g => h('details', { open: openGroup === g.id, ontoggle: e => { if (e.target.open) openGroup = g.id; } },
-    h('summary', null, h('b', null, g.title), g.pde.length ? h('small', null, g.pde.join(' · ')) : null),
-    h('div', { class: 'ctrl-grid' }, g.params.map(p => slider(app, { ...p, def: p.def }))))));
+  // A group's controls exist only while it is open: sliders left inside a folded group are still met by
+  // a screen reader, as nameless "value indicators".
+  const groups = h('div', { class: 'acc' }, PARAM_GROUPS.map(g => {
+    const body = h('div', { class: 'ctrl-grid' }), fillGroup = () => { if (!body.firstChild) body.append(...g.params.map(p => slider(app, { ...p, def: p.def }))); };
+    if (openGroup === g.id) fillGroup();
+    return h('details', { open: openGroup === g.id, ontoggle: e => { if (e.target.open) { openGroup = g.id; fillGroup(); } else body.replaceChildren(); } },
+      h('summary', null, h('b', null, g.title), g.pde.length ? h('small', null, g.pde.join(' · ')) : null), body);
+  }));
 
   // Results.
   const tF = v => `m${num(v, v % 1 ? 1 : 0)}`;
@@ -230,21 +237,21 @@ export function simulate(root, app) {
   const shown = mcShown === key, running = !!mcRun && mcRun.key === key;
   const mcLabel = () => (mcShown === key && mcRun?.key === key ? `Running… ${Math.round(mcRun.progress * 100)}%` : mcShown === key && mcResult ? 'Re-run' : 'Run stress test');
   const paint = () => { if (mcBtnRef?.isConnected) { const busy = mcShown === mcWant && mcRun?.key === mcWant; mcBtnRef.disabled = busy; mcBtnRef.replaceChildren(icon(busy ? 'layers' : mcShown === mcWant && mcResult ? 'refresh' : 'layers', 16), busy ? `Running… ${Math.round(mcRun.progress * 100)}%` : mcShown === mcWant && mcResult ? 'Re-run' : 'Run stress test'); } };
-  const launch = async () => {
+  const launch = async (ahead = false) => {
     // The stance structure uses the paper's calibrated k_z (§5.3, §7.7).
     const published = await paperResults();
     if (mcWant !== key || mcRun?.key === key) return;
-    startMC(app, key, { cells, P, scenario: SCENARIOS[app.scenario], seed: Date.now() % 100000, market: app.marketPath(), est: (() => { try { return context(app.data, P).phillips; } catch { return null; } })(), kStanceAlt: published?.transmission?.kCalibrated ?? null }, paint);
+    startMC(app, key, { cells, P, scenario: SCENARIOS[app.scenario], seed: Date.now() % 100000, market: app.marketPath(), est: (() => { try { return context(app.data, P).phillips; } catch { return null; } })(), kStanceAlt: published?.transmission?.kCalibrated ?? null }, paint, ahead);
     paint();
   };
   // A run for another region, scenario or parameter set is abandoned. The test for the settings now on
-  // screen is started ahead of the button once they have rested a moment, so that pressing it shows
+  // screen is started ahead of the button once they have rested a few seconds and no data are arriving, so that pressing it shows
   // the result at once.
   mcWant = key;
   if (mcRun && mcRun.key !== key) stopMC(app);
   clearTimeout(mcWarm);
   if (!(mcResult && !mcResult.quick) && !mcRun && root.isConnected !== false && (navigator.hardwareConcurrency || 2) >= 4 && !navigator.connection?.saveData)
-    mcWarm = setTimeout(() => { if (mcWant === key && !mcRun && !(mcResult && !mcResult.quick) && location.hash.startsWith('#/simulate') && document.visibilityState === 'visible') launch(); }, 1500);
+    mcWarm = setTimeout(() => { if (mcWant === key && !mcRun && !(mcResult && !mcResult.quick) && location.hash.startsWith('#/simulate') && document.visibilityState === 'visible' && !app.refreshing) launch(true); }, 3000);
   const mcBtn = h('button', { class: 'btn', disabled: shown && running, onclick: () => {
     if (mcShown === key && mcRun?.key === key) return;
     const again = mcShown === key && mcResult;

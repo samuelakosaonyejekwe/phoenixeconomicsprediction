@@ -62,17 +62,24 @@ export function createApp() {
 
   // Pages are redrawn only when data actually change; progress updates refresh only the status chrome,
   // so open sections, focus and partly typed inputs are not lost while sources load.
-  let lastPrint = null;
+  let lastPrint = null, lastPublish = -Infinity, gathering = 0;
+  const GATHER = 4000;
+  const publish = () => {
+    clearTimeout(gathering); gathering = 0; lastPublish = performance.now();
+    lastPrint = store.fingerprint();
+    app.data = store.dataView();
+    if (app.weoVintages) app.data.weoVintages = app.weoVintages;
+    rebuild();
+    emit();
+  };
   const store = createDataStore(async ({ status, snapshotInfo, refreshing }) => {
     app.status = status; app.snapshotInfo = snapshotInfo; app.refreshing = refreshing;
-    const print = store.fingerprint();
-    if (print !== lastPrint) {
-      lastPrint = print;
-      app.data = store.dataView();
-      if (app.weoVintages) app.data.weoVintages = app.weoVintages;
-      rebuild();
-      emit();
-    } else emit('status');
+    // While a refresh is under way its sources arrive one after another over several seconds. Redrawing
+    // for each would re-solve the model each time and hold up the page, so the arrivals are gathered:
+    // the pages are redrawn at most once every four seconds, and once more when the refresh ends.
+    if (store.fingerprint() === lastPrint) emit('status');
+    else if (!refreshing || performance.now() - lastPublish > GATHER) publish();
+    else { emit('status'); gathering ||= setTimeout(() => { if (store.fingerprint() !== lastPrint) publish(); else gathering = 0; }, GATHER - (performance.now() - lastPublish)); }
     if (!refreshing) { await nowcast(); await signalPass(); }
   });
 

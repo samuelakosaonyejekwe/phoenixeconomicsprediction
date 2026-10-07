@@ -4,6 +4,15 @@ name: Apple compatibility
 # compatibility → Run workflow); it deploys nothing.
 on:
   workflow_dispatch:
+    inputs:
+      only:
+        description: 'Run one check only: safari, ios or voiceover (empty: all)'
+        required: false
+        default: ''
+      pages:
+        description: 'VoiceOver: pages to read, comma-separated (empty: all)'
+        required: false
+        default: ''
 
 permissions:
   contents: read
@@ -14,6 +23,7 @@ concurrency:
 
 jobs:
   safari:
+    if: ${{ inputs.only == '' || inputs.only == 'safari' }}
     runs-on: macos-15
     timeout-minutes: 60
     steps:
@@ -30,6 +40,7 @@ jobs:
           node e2e/safari.mjs
 
   ios:
+    if: ${{ inputs.only == '' || inputs.only == 'ios' }}
     runs-on: macos-26
     timeout-minutes: 60
     steps:
@@ -53,6 +64,7 @@ jobs:
           PHX_IOS=1 node e2e/safari.mjs
 
   voiceover:
+    if: ${{ inputs.only == '' || inputs.only == 'voiceover' }}
     runs-on: macos-14
     timeout-minutes: 90
     steps:
@@ -65,8 +77,9 @@ jobs:
       - run: npm run build
       - name: VoiceOver reading the application in Safari
         run: |
-          npx --yes @guidepup/setup@0.29.1 setup --ci
+          # Preparing the machine for VoiceOver occasionally fails on a fresh runner: tried up to three times.
+          for attempt in 1 2 3; do npx --yes @guidepup/setup@0.29.1 setup --ci && break; [ "$attempt" = 3 ] && exit 1; sleep 15; done
           npm install --no-save @guidepup/guidepup@0.35.0
           npx --yes @guidepup/setup@0.29.1 install
           sudo safaridriver --enable
-          node e2e/voiceover.mjs
+          PHX_PAGES="${{ inputs.pages }}" node e2e/voiceover.mjs

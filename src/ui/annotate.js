@@ -28,7 +28,27 @@ const OWN = '.tile, .dotg, .bar-row, .bar-seg, .cell';
 const directText = el => [...el.childNodes].filter(n => n.nodeType === 3).map(n => n.textContent).join(' ').trim();
 const firstChildText = el => (el.firstElementChild ? el.firstElementChild.textContent.trim() : '');
 
+// A folded section's heading is exposed to assistive technology as one button that says whether it is
+// open, with its text as its name and nothing inside it to stop on. Left as a bare <summary> holding an
+// icon and tags, VoiceOver's move-to-next-control command comes to rest inside it and does not go past
+// (found by reading every page with VoiceOver; a summary of plain text does not have the problem).
+function disclosures(root) {
+  for (const s of root.matches?.('summary') ? [root] : root.querySelectorAll('summary')) {
+    s.setAttribute('role', 'button');
+    s.setAttribute('aria-expanded', String(!!s.parentElement?.open));
+    if (!s.children.length || s.firstElementChild?.classList.contains('sum-in')) continue;
+    s.setAttribute('aria-label', s.textContent.replace(/\s+/g, ' ').trim());
+    const inner = document.createElement('span');
+    inner.className = 'sum-in';
+    inner.setAttribute('aria-hidden', 'true');
+    inner.append(...s.childNodes);
+    s.append(inner);
+  }
+}
+if (typeof document !== 'undefined') document.addEventListener('toggle', e => { const s = e.target.querySelector?.(':scope > summary'); if (s) s.setAttribute('aria-expanded', String(e.target.open)); }, true);
+
 export function annotate(root) {
+  disclosures(root);
   for (const el of root.querySelectorAll(LABELS)) {
     if (el.closest(OWN)) continue;
     // A native title becomes the shared tooltip, so the two never show together.

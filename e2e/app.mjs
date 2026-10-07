@@ -41,6 +41,8 @@ const stubAnchors = ctx => ctx.route(/\/anchor(\/[0-9a-f]{64})?$/, async route =
 const context = await browser.newContext({ viewport: { width: 1280, height: 900 }, serviceWorkers: 'block' });
 await stubAnchors(context);
 const page = await context.newPage();
+// A busy machine can hold a click for a while (the model is solved in the page): two minutes are allowed.
+page.setDefaultTimeout(120000);
 const errors = [];
 page.on('pageerror', e => errors.push(e.message));
 // Network failures of the publishers are tolerated (the app falls back to stored data); any other error,
