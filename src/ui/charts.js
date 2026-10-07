@@ -93,7 +93,8 @@ export function dataTable({ cols, rows }) {
 export function lineChart({ series, bands = [], height = 220, yFmt = v => num(v, 1), xFmt = v => num(v, 0), refs = [], vlines = [], yMin, yMax, xLabel, gap = false }) {
   // gap: the chart compares two paths that may coincide at its scale; their difference is then stated
   // in figures, under the chart and beside the pointer.
-  const gapAt = xv => { const [p, q] = series.map(se => se.values.find(v => v[0] === xv)); return p && q ? p[1] - q[1] : null; };
+  // A difference a thousand-millionth the size of the values is the rounding error of the arithmetic, not an effect.
+  const gapAt = xv => { const [p, q] = series.map(se => se.values.find(v => v[0] === xv)); if (!p || !q) return null; const d = p[1] - q[1]; return Math.abs(d) <= 1e-9 * Math.max(1, Math.abs(p[1]), Math.abs(q[1])) ? 0 : d; };
   const host = h('div', { class: 'chart', tabindex: 0, role: 'img', 'aria-label': series.map(s => s.name).join(', ') });
   const all = series.flatMap(s => s.values);
   const xs = [...new Set(all.map(v => v[0]))].sort((a, b) => a - b);
@@ -184,7 +185,7 @@ export function lineChart({ series, bands = [], height = 220, yFmt = v => num(v,
     if (xLabel) host.append(h('p', { class: 'chart-cap' }, xLabel));
     if (gap) {
       const far = xs.reduce((best, xv) => { const d = gapAt(xv); return d !== null && Math.abs(d) > Math.abs(best[1]) ? [xv, d] : best; }, [xs[0], 0]);
-      host.append(h('p', { class: 'chart-cap gap' }, far[1] === 0 ? 'The two paths are identical.' : `Largest difference (first minus second): ${small(far[1], 4)} at ${xFmt(far[0])}; at the end ${small(gapAt(xs[xs.length - 1]) ?? 0, 4)}.`));
+      host.append(h('p', { class: 'chart-cap gap' }, far[1] === 0 ? 'The two paths are the same: no difference beyond rounding error.' : `Largest difference (first minus second): ${small(far[1], 4)} at ${xFmt(far[0])}; at the end ${small(gapAt(xs[xs.length - 1]) ?? 0, 4)}.`));
       // The difference itself, on its own scale: the two paths cannot be told apart at the chart's.
       const ds = xs.map(xv => [xv, gapAt(xv)]).filter(p => p[1] !== null), dLo = Math.min(0, ...ds.map(p => p[1])), dHi = Math.max(0, ...ds.map(p => p[1]));
       if (dHi - dLo > 0) {
@@ -192,8 +193,9 @@ export function lineChart({ series, bands = [], height = 220, yFmt = v => num(v,
         const strip = s('svg', { width: W, height: h2, class: 'svg gap-svg', 'aria-hidden': 'true' });
         strip.append(s('line', { x1: m.l, x2: W - m.r, y1: Y2(0), y2: Y2(0), class: 'grid' }),
           s('path', { d: ds.map((p, k) => `${k ? 'L' : 'M'}${X(p[0]).toFixed(1)},${Y2(p[1]).toFixed(1)}`).join(''), class: 'line' }),
-          s('text', { x: m.l - 6, y: Y2(dHi) + 3, class: 'tick', 'text-anchor': 'end' }, dHi === 0 ? '0' : small(dHi, 4)),
-          s('text', { x: m.l - 6, y: Y2(dLo) + 3, class: 'tick', 'text-anchor': 'end' }, dLo === 0 ? '0' : small(dLo, 4)));
+          // The scale is written inside the strip, at its left edge: a long figure cannot reach outside the card.
+          s('text', { x: m.l + 4, y: Y2(dHi) + (dHi === 0 ? -4 : 10), class: 'tick' }, dHi === 0 ? '0' : small(dHi, 4)),
+          s('text', { x: m.l + 4, y: Y2(dLo) + (dLo === 0 ? 10 : -4), class: 'tick' }, dLo === 0 ? '0' : small(dLo, 4)));
         host.append(h('p', { class: 'chart-cap' }, 'The difference on its own scale'), strip);
       }
     }

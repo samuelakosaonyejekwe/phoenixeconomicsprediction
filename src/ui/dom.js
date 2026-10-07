@@ -35,13 +35,16 @@ export const clear = el => { while (el.firstChild) el.firstChild.remove(); retur
 
 // Number formatting.
 const nf = new Map();
-// A small effect is not printed as zero: a value that would round to 0 at `d` decimals is shown to its
-// first two significant digits instead (−0.000042 rather than 0.0000); an exact zero is 0.
+// A small effect is not printed as zero: a value that would round to 0 at `d` decimals is shown in
+// standard form to two significant digits (-4.2e-5, 2e-10); an exact zero is 0. Anything below 1e-12 in
+// size is the rounding error of the arithmetic and is 0 as well.
 export function small(v, d = 4) {
   if (v === null || v === undefined || Number.isNaN(v)) return '–';
   const a = Math.abs(v);
   if (a < 1e-12) return '0';
-  return a >= 0.5 * 10 ** -d ? num(v, d) : num(v, Math.min(12, Math.ceil(-Math.log10(a)) + 1));
+  if (a >= 0.5 * 10 ** -d) return num(v, d);
+  const [m, e] = v.toExponential(1).split('e');
+  return `${m.replace(/\.0$/, '')}e${Number(e)}`;
 }
 
 export function num(v, d = 1) {
