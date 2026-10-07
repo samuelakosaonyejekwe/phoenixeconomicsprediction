@@ -175,8 +175,19 @@ function place(g, C) {
   }
   // Charts and lists take up what their card was given.
   g.classList.add('bal-m');
-  items.forEach((it, i) => fill(it, give[i] || 0, hs[i]));
+  items.forEach((it, i) => {
+    fill(it, give[i] || 0, hs[i]);
+    // Filling never makes a card taller than its place: one that overshoots (a caption that wraps as its
+    // chart grows) is filled by that much less, or not at all.
+    const over = it.offsetHeight - (hs[i] + (give[i] || 0));
+    if (over > 1) { fill(it, Math.max(0, give[i] - over - 4), hs[i]); if (it.offsetHeight - (hs[i] + give[i]) > 1) unfill(it); }
+  });
   g.classList.remove('bal-m');
+  // Whatever happens to a card afterwards (a chart drawn a frame later, a caption that wraps), its content
+  // must not be left reaching past its place: looked at again on the next frames, a few times at most.
+  if (!plan.rows && (g._heal = (g._heal || 0) + 1) <= 4) requestAnimationFrame(() => requestAnimationFrame(() => {
+    if (g.isConnected && g._plan === plan && items.some(it => it.scrollHeight > it.clientHeight + 1)) place(g, C); else g._heal = 0;
+  }));
   return { worst, sig: hs.map(v => Math.round(v / 24)).join(), sum: hs.reduce((x, y) => x + y, 0) };
 }
 
@@ -246,6 +257,7 @@ function check(g, C, key) {
     if (performance.now() - g._built < SETTLE) return check(g, C, key);
     // Chosen again only when the cards have changed height since the arrangement was chosen (a table
     // opened, new data), so a difference that cannot be removed is not chased.
+    g._heal = 0;
     const plan = g._plan, now = place(g, C);
     if (plan.sig === undefined) { plan.sig = now.sig; plan.sum = now.sum; plan.worst = Math.min(Math.max(plan.worst, now.worst), plan.worst + 2 * EVEN); }
     // …or have become much shorter or longer altogether (a table closed again): a better arrangement may exist.
