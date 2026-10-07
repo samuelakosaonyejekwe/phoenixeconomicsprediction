@@ -78,7 +78,7 @@ jobs:
       - name: VoiceOver reading the application in Safari
         run: |
           # Preparing the machine for VoiceOver occasionally fails on a fresh runner: tried up to three times.
-          for attempt in 1 2 3; do npx --yes @guidepup/setup@0.29.1 setup --ci && break; [ "$attempt" = 3 ] && exit 1; sleep 15; done
+          for attempt in 1 2 3; do if npx --yes @guidepup/setup@0.29.1 setup --ci; then break; fi; if [ "$attempt" = 3 ]; then exit 1; fi; sleep 15; done
           npm install --no-save @guidepup/guidepup@0.35.0
           npx --yes @guidepup/setup@0.29.1 install
           sudo safaridriver --enable
