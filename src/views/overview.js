@@ -51,9 +51,10 @@ export function overview(root, app) {
       h('h1', null, headline),
       h('p', { class: 'lead' }, `GDP-weighted inflation is ${pct(piW, 2)} against a ${P.piTh}% trigger; ${eur(Stot, 0)} of excess deposits are measured against a combined historical threshold of ${eur(Scrit, 0)}.`),
       h('div', { class: 'state-strip' }, ['ACTIVE', 'ARMED', 'WATCH', 'DORMANT'].map(k => h('a', { href: '#/contracts', class: 'state-pill' }, badge(k), h('b', null, count(k)))))),
-    h('div', { class: 'hero-fig' }, h('span', null, 'Projected inflation in ', String(P.months), ' months', SCENARIOS[app.scenario].referenceCase ? ` · ${SCENARIOS[app.scenario].label}` : SCENARIOS[app.scenario].shock ? ` · ${SCENARIOS[app.scenario].label}` : ''),
-      h('b', null, end ? pct(end.pi, 1) : '–'),
-      h('span', { class: 'muted' }, endB ? `${pct(endB.pi, 2)} without Phoenix (${small(end.pi - endB.pi, 4)} pp)` : '')));
+    // What Phoenix does is said first; its effect on prices, which is very small, beside it.
+    h('div', { class: 'hero-fig' }, h('span', null, 'Absorbed in ', String(P.months), ' months', SCENARIOS[app.scenario].referenceCase ? ` · ${SCENARIOS[app.scenario].label}` : SCENARIOS[app.scenario].shock ? ` · ${SCENARIOS[app.scenario].label}` : ''),
+      h('b', null, sim ? eur(sim.totals.absorbed, 1) : '–'),
+      h('span', { class: 'muted' }, end && endB ? `Inflation then ${pct(end.pi, 2)}; ${pct(endB.pi, 2)} without Phoenix (${small(end.pi - endB.pi, 4)} pp)` : '')));
 
   const kpis = h('div', { class: 'kpis' },
     kpi({ label: P.nowcast && ncAsOf ? `Weighted inflation, nowcast ${ncAsOf}` : 'Weighted inflation', value: pct(piW, 2), sub: P.nowcast && ncAsOf ? `Official ${pct(piOff, 2)}, ${cells[0].piPeriod.replace(/[()]/g, '')}` : `Official, ${cells[0].piPeriod.replace(/[()]/g, '')}`, delta: `${num(piW - P.target, 2)} pp vs target`, good: piW <= P.target }),
@@ -61,7 +62,7 @@ export function overview(root, app) {
     app.region !== 'global' && liq ? kpi({ label: 'Eurosystem deposit facility', value: eur(liq[1] / 1000, 0), sub: `Banks’ overnight deposits at the Eurosystem, week ${liq[0]}` }) : kpi({ label: 'Economies monitored', value: String(cells.length), sub: 'IMF / World Bank panel' }),
     sim ? kpi({ label: 'Output gap and policy rate', value: `${num(sim.agg[0].x, 1)}% · ${pct(sim.agg[0].i, 2)}`, sub: `GDP-based gap updated by monthly unemployment; ${app.region === 'global' ? 'Taylor rule where no market path exists' : 'ECB deposit facility, then the forward curve'} (Solutions §3.5, §4.10)` }) : null,
     sim ? kpi({ label: 'Disorder index 𝒟', value: num(sim.agg[0].D, 2), sub: `GDP-weighted, now; ${num(end.D, 2)} at m${P.months} with Phoenix, ${num(endB.D, 2)} without (Solutions §4.12)` }) : null,
-    sim ? kpi({ label: `Absorbed in ${P.months} months`, value: eur(sim.totals.absorbed, 1), sub: `${eur(sim.totals.creditsHeld + sim.totals.walletsHeld, 1)} held as PHX credits & wallets` }) : null);
+    sim && endB ? kpi({ label: `Projected inflation in ${P.months} months`, value: pct(end.pi, 2), sub: `${pct(endB.pi, 2)} without Phoenix: a difference of ${small(end.pi - endB.pi, 4)} pp. ${eur(sim.totals.creditsHeld + sim.totals.walletsHeld, 1)} of what was absorbed is still held as PHX credits & wallets` }) : null);
 
   // Closed loop with live values per stage.
   const t = sim?.totals;

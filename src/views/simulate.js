@@ -270,6 +270,29 @@ export function simulate(root, app) {
     download(`phoenix-simulation-${app.region}-${app.scenario}.csv`, [cols.join(','), ...rows.map(r => r.join(','))].join('\n'), 'text/csv');
   };
 
+  // What Phoenix did in this run, said first: whether any contract switched on, how much was absorbed, how
+  // small the effect on prices is, and what it would take for that effect to be visible.
+  const absorbed = sim.totals.absorbed, dPi = end.pi - endB.pi, S0 = sim.agg[0].S;
+  const on = cells.filter((_, i) => sim.rec.Theta.some(r => r[i] >= 0.5)).length;
+  const hot = cells.filter(c => c.pi >= P.piTh).length;
+  const working = absorbed > 1e-6;
+  const need = absorbed * 0.1 / Math.abs(dPi);
+  const status = card({
+    title: 'Phoenix in this run',
+    actions: h('span', { class: ['badge', working ? 't-good' : 't-info'], 'data-tip': working ? 'At least one contract switched on in this run and funds were absorbed.' : 'No contract switched on in this run: nothing was absorbed.' }, working ? 'Working' : 'Idle'),
+    body: h('div', { class: 'run-status' }, ...(working ? [
+      h('p', null, `Contracts switched on in ${on} of ${cells.length} ${cells.length === 1 ? 'economy' : 'economies'} and absorbed `, h('b', null, eur(absorbed, 1)), ` over ${P.months} months, ${num(absorbed / Math.max(1e-9, S0) * 100, 1)}% of the excess stock at the start; ${eur(sim.totals.creditsHeld + sim.totals.walletsHeld, 1)} is still held as credits and wallets at the end.`),
+      h('p', null, 'Its effect on inflation at the end is ', h('b', null, `${small(dPi, 4)} pp`), '. The lines with and without Phoenix in the charts below lie on top of each other because the effect is this small, not because nothing ran; each chart states the difference in figures and draws it on its own scale.'),
+      h('p', { class: 'sub' }, dPi < -1e-9
+        ? `Read proportionally — a scaling of this run, not a simulation — lowering inflation by 0.1 pp would take about ${eur(need, need >= 1000 ? 1 : 0)} of absorption, ${num(need / Math.max(1e-9, S0), need / S0 >= 10 ? 0 : 1)} times the whole excess stock at the start (${eur(S0, 0)}).`
+        : 'In this run inflation is not lower with Phoenix at the end of the horizon: absorbed funds come back as matured credits and wallet spending within it.'),
+    ] : [
+      h('p', null, 'No contract switched on in this run, so nothing was absorbed and the paths with and without Phoenix are one and the same.'),
+      h('p', null, hot === 0 ? `Inflation is below the ${P.piTh}% trigger in every economy.` : `Inflation is at or above the ${P.piTh}% trigger in ${hot} of ${cells.length} ${cells.length === 1 ? 'economy' : 'economies'}, but excess deposits there are not above their threshold S_crit, and a contract needs both.`),
+      h('p', { class: 'sub' }, 'To see Phoenix act, choose the scenario “EU-27 as of 31 December 2021” or “Surplus surge”, or lower the trigger or the critical stock under Contract activation.'),
+    ])),
+  });
+
   root.append(
     pageHead('Simulation lab', 'The coupled model of §4, solved on the selected economies from today’s data. Change any parameter and every chart, map and alert updates.',
       h('div', { class: 'row' },
@@ -280,10 +303,11 @@ export function simulate(root, app) {
     h('div', { class: 'lab' },
       h('aside', { class: 'lab-p' }, card({ title: 'Parameters', sub: 'Values from Solutions Table 6. Tags: D estimated from data · L empirical literature · P policy design · M measured by the trials · N numerical', body: groups })),
       h('div', { class: 'lab-r' },
+        status,
         h('div', { class: 'kpis' },
+          kpi({ label: 'Excess stock absorbed', value: eur(sim.totals.absorbed, 1), sub: `${num(sim.totals.absorbed / Math.max(1e-9, sim.agg[0].S) * 100, 1)}% of the initial stock · ${num(end.S / end.Scrit, 2)}× S_crit at m${P.months} (${num(endB.S / endB.Scrit, 2)}× without)` }),
           kpi({ label: `Inflation at m${P.months}`, value: pct(end.pi, 2), delta: `${small(end.pi - endB.pi, 4)} pp vs no Phoenix`, good: end.pi <= endB.pi }),
           kpi({ label: `Policy rate at m${P.months}`, value: pct(end.i, 2), delta: `${small(end.i - endB.i, 4)} pp vs no Phoenix`, good: end.i <= endB.i }),
-          kpi({ label: 'Excess stock absorbed', value: eur(sim.totals.absorbed, 1), sub: `${num(sim.totals.absorbed / Math.max(1e-9, sim.agg[0].S) * 100, 1)}% of the initial stock · ${num(end.S / end.Scrit, 2)}× S_crit at m${P.months} (${num(endB.S / endB.Scrit, 2)}× without)` }),
           kpi({ label: 'Months until inflation stays within ±0.3 pp of target', value: firstOnTarget(sim.agg, P.target) === null ? 'not reached' : num(firstOnTarget(sim.agg, P.target), 1), sub: firstOnTarget(base.agg, P.target) === null ? 'not reached without Phoenix' : `${num(firstOnTarget(base.agg, P.target), 1)} without` }),
           kpi({ label: `Disorder index at m${P.months}`, value: num(end.D, 2), delta: `${small(end.D - endB.D, 2)} vs no Phoenix`, good: end.D <= endB.D }),
           kpi({ label: 'Conservation check', value: Math.abs(sim.totals.residual) < 1e-6 ? 'Balanced' : eur(sim.totals.residual, 3), sub: 'Absorbed + premiums = credits + wallets + spent + matured + recalled (§4.13)', good: Math.abs(sim.totals.residual) < 1e-6 })),

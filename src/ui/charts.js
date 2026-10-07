@@ -185,6 +185,17 @@ export function lineChart({ series, bands = [], height = 220, yFmt = v => num(v,
     if (gap) {
       const far = xs.reduce((best, xv) => { const d = gapAt(xv); return d !== null && Math.abs(d) > Math.abs(best[1]) ? [xv, d] : best; }, [xs[0], 0]);
       host.append(h('p', { class: 'chart-cap gap' }, far[1] === 0 ? 'The two paths are identical.' : `Largest difference (first minus second): ${small(far[1], 4)} at ${xFmt(far[0])}; at the end ${small(gapAt(xs[xs.length - 1]) ?? 0, 4)}.`));
+      // The difference itself, on its own scale: the two paths cannot be told apart at the chart's.
+      const ds = xs.map(xv => [xv, gapAt(xv)]).filter(p => p[1] !== null), dLo = Math.min(0, ...ds.map(p => p[1])), dHi = Math.max(0, ...ds.map(p => p[1]));
+      if (dHi - dLo > 0) {
+        const h2 = 60, Y2 = v => 8 + (1 - (v - dLo) / (dHi - dLo)) * (h2 - 16);
+        const strip = s('svg', { width: W, height: h2, class: 'svg gap-svg', 'aria-hidden': 'true' });
+        strip.append(s('line', { x1: m.l, x2: W - m.r, y1: Y2(0), y2: Y2(0), class: 'grid' }),
+          s('path', { d: ds.map((p, k) => `${k ? 'L' : 'M'}${X(p[0]).toFixed(1)},${Y2(p[1]).toFixed(1)}`).join(''), class: 'line' }),
+          s('text', { x: m.l - 6, y: Y2(dHi) + 3, class: 'tick', 'text-anchor': 'end' }, dHi === 0 ? '0' : small(dHi, 4)),
+          s('text', { x: m.l - 6, y: Y2(dLo) + 3, class: 'tick', 'text-anchor': 'end' }, dLo === 0 ? '0' : small(dLo, 4)));
+        host.append(h('p', { class: 'chart-cap' }, 'The difference on its own scale'), strip);
+      }
     }
   }, { tall: true });
   return host;

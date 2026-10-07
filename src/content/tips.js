@@ -210,6 +210,8 @@ export const TIPS = {
   'Eurosystem deposit facility': 'Money banks hold overnight at the Eurosystem: the existing absorption of excess liquidity (§2.3).',
   'Output gap and policy rate': 'Output relative to potential and the central bank’s rate today (§3.5, §4.10).',
   'Absorbed over the horizon': 'Funds Phoenix would convert into PHX over the horizon of the current run (§4.4).',
+  'Projected inflation over the horizon': 'GDP-weighted inflation at the end of the horizon of the current run, with Phoenix; the figure without it is beside it (§4.9).',
+  'Phoenix in this run': 'Whether any contract switched on in this run, how much was absorbed, and how large the effect on inflation is.',
   'Brent crude in €': 'Oil price in euro: drives the daily nowcast and energy inflation (§3.7).',
   'EUR / USD': 'Euro exchange rate: drives the nowcast’s exchange-rate term for euro-area members (§3.7).',
   '€STR overnight rate': 'The euro short-term rate: today’s money-market rate.',
