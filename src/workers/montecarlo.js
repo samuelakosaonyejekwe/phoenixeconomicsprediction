@@ -16,15 +16,17 @@ function chol(A) { const n = A.length, L = A.map(() => new Array(n).fill(0)); fo
 const gauss = r => Math.sqrt(-2 * Math.log(1 - r())) * Math.cos(2 * Math.PI * r());
 
 self.onmessage = ({ data }) => {
-  // Runs `from` to `to` of `runs`: several workers share one stress test, each run with its own random
-  // stream so that the result does not depend on how the runs are shared out. With `raw` each run is
+  // Runs `from` to `to` of `runs`: several workers share one stress test. With `raw` each run is
   // sent as it finishes, for the page to merge; otherwise the runs are summarised here.
   const { cells, P, scenario, runs, seed, market, oilYoy, paramUncertainty = true, est = null, kStanceAlt = null, from = 0, to = runs, raw = false, phase = 0 } = data;
   const oil = oilYoy ? { yoy: oilYoy, at: t => { const k = Math.min(oilYoy.length - 1, Math.max(0, Math.floor(t))), k1 = Math.min(oilYoy.length - 1, k + 1); return oilYoy[k] + (oilYoy[k1] - oilYoy[k]) * (t - Math.floor(t)); } } : null;
   const prep = prepare(cells, P, scenario);
   const out = { on: [], off: [] };
+  // One stream for a whole test summarised here (the paper's, §7.7); a stream of its own for each run
+  // when the runs are shared among workers.
+  const stream = rng(seed || 7);
   for (let k = from; k < to; k++) {
-    const r = rng((seed || 7) + 7919 * (k + 1));
+    const r = raw ? rng((seed || 7) + 7919 * (k + 1)) : stream;
     const common = gauss(r) * 0.06;
     const perturb = { noise: cells.map(() => common + gauss(r) * 0.06), inj: cells.map(() => Math.exp(gauss(r) * 0.35)) };
     // Parameter uncertainty (§7.7): estimated parameters from their sampling distributions,
