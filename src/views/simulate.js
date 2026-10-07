@@ -9,7 +9,19 @@ import { slider } from './controls.js';
 
 let frame = null, field = 'pi', playing = null, openGroup = 'absorb', mcResult = null, mcKey = '', mcRun = null, mcBtnRef = null;
 // The k_A search result survives redraws (data refreshes, status updates) while its inputs are unchanged.
-let kaResult = null, kaKey = '', kaBusy = '', kaData = '', kaTimer = 0, kaReveal = false;
+let kaResult = null, kaKey = '', kaBusy = '', kaData = '', kaTimer = 0, kaReveal = false, mcReveal = false, mcData = '';
+// A result asked for with a button is brought into view and marked when it arrives, and again once
+// the cards around it have taken their places.
+function reveal(el) {
+  const show = first => {
+    if (!el.isConnected) return;
+    const rc = el.getBoundingClientRect();
+    if (first || rc.top < 70 || rc.bottom > innerHeight - 70) el.scrollIntoView({ block: rc.height > innerHeight - 160 ? 'start' : 'center', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+    if (first) { el.classList.add('flash'); el.setAttribute('tabindex', '-1'); el.focus({ preventScroll: true }); }
+  };
+  setTimeout(() => show(true), 60);
+  setTimeout(() => show(false), 700);
+}
 
 const FIELDS = {
   pi: { label: 'Inflation π', fmt: v => pct(v, 2), color: (v, P) => divColor(v - P.target, 4), val: (r, f, i) => r.rec.pi[f][i] },
@@ -140,15 +152,17 @@ export function simulate(root, app) {
   if (kaResult && kaKey === optKey) {
     drawKA(kaResult);
     if (kaData !== app.dataStamp && kaBusy !== optKey) runKA();
-    if (kaReveal) { kaReveal = false; requestAnimationFrame(() => { const rc = optOut.getBoundingClientRect(); if (rc.top < 60 || rc.bottom > innerHeight) optOut.scrollIntoView({ block: 'center' }); optOut.classList.add('flash'); }); }
+    if (kaReveal) { kaReveal = false; reveal(optOut); }
   }
   const busy = kaBusy === optKey;
   const optBtn = h('button', { class: 'btn', disabled: busy, 'aria-busy': String(busy), onclick: () => { kaReveal = true; optBtn.disabled = true; optBtn.lastChild.textContent = 'Searching…'; runKA(); } }, icon('zap', 16), h('span', null, busy ? 'Searching…' : kaResult && kaKey === optKey ? 'Search again' : 'Optimise k_A'));
 
   // Monte Carlo.
-  const key = JSON.stringify([app.region, app.scenario, P, app.dataStamp]);
+  // The result belongs to a region, scenario and parameter set. Data arriving during or after a run do
+  // not discard it: it stays on screen, marked with the data it was computed on.
+  const key = JSON.stringify([app.region, app.scenario, P]);
   if (key !== mcKey) mcResult = null;
-  const mcHost = h('div');
+  const mcHost = h('div', { class: 'mc-result' });
   const drawMC = () => {
     if (!mcResult) { mcHost.replaceChildren(h('p', { class: 'sub' }, '200 randomised runs, as in the paper, with shocks to the inflation trend and to new inflows, correlated draws of the estimated Phillips parameters, published ranges for the behavioural parameters and four model structures, each solved with and without Phoenix under the same draws (Solutions §7.7).')); return; }
     const m = mcResult;
@@ -160,25 +174,28 @@ export function simulate(root, app) {
       lineChart({
         series: [{ name: 'Median with Phoenix', color: SERIES[0], values: m.t.map((t, i) => [t, m.piOn[i][1]]) }, { name: 'Median without', color: SERIES[1], dash: true, values: m.t.map((t, i) => [t, m.piOff[i][1]]) }],
         bands: [{ color: SERIES[0], values: m.t.map((t, i) => [t, m.piOn[i][0], m.piOn[i][2]]) }, { color: SERIES[1], values: m.t.map((t, i) => [t, m.piOff[i][0], m.piOff[i][2]]), opacity: 0.1 }],
-        refs: [{ y: P.target, label: `Target ${P.target}%` }], yFmt: v => `${num(v, 1)}%`, xFmt: tF, height: 220 }));
+        refs: [{ y: P.target, label: `Target ${P.target}%` }], yFmt: v => `${num(v, 1)}%`, xFmt: tF, height: 220 }),
+      mcData !== app.dataStamp ? h('p', { class: 'sub' }, 'Newer data have arrived since this run; run it again to include them.') : null);
   };
   drawMC();
+  if (mcResult && mcReveal) { mcReveal = false; reveal(mcHost); }
   // The stress test lives at module level so a page re-render (e.g. a live-data refresh)
   // never loses a run in progress or its result.
   const mcLabel = () => mcRun ? `Running… ${Math.round(mcRun.progress * 100)}%` : mcResult ? 'Re-run' : 'Run stress test';
   const mcBtn = h('button', { class: 'btn', disabled: !!mcRun, onclick: async () => {
     if (mcRun) return;
+    mcReveal = true;
     // The stance structure uses the paper's calibrated k_z (§5.3, §7.7).
     const published = await paperResults();
     const w = globalThis.PHX_MC_SRC ? new Worker(URL.createObjectURL(new Blob([globalThis.PHX_MC_SRC], { type: 'text/javascript' }))) : new Worker(new URL('mc.js', document.baseURI));
-    mcRun = { progress: 0, key }; app.busy = (app.busy || 0) + 1;
+    mcRun = { progress: 0, key, data: app.dataStamp }; app.busy = (app.busy || 0) + 1;
     const paint = () => { if (mcBtnRef) { mcBtnRef.disabled = !!mcRun; mcBtnRef.replaceChildren(icon(mcRun ? 'layers' : 'refresh', 16), mcLabel()); } };
     paint();
     w.onmessage = ({ data }) => {
       if (data.progress) { mcRun.progress = data.progress; paint(); return; }
-      mcResult = data; mcKey = mcRun.key; mcRun = null; app.busy--; w.terminate(); app.rerender();
+      mcResult = data; mcKey = mcRun.key; mcData = mcRun.data; mcRun = null; app.busy--; w.terminate(); app.rerender();
     };
-    w.onerror = () => { mcRun = null; app.busy--; paint(); toast('Stress test could not start in this browser.'); };
+    w.onerror = () => { mcReveal = false; mcRun = null; app.busy--; paint(); toast('Stress test could not start in this browser.'); };
     w.postMessage({ cells, P, scenario: SCENARIOS[app.scenario], runs: 200, seed: Date.now() % 100000, market: app.marketPath(), est: (() => { try { return context(app.data, P).phillips; } catch { return null; } })(), kStanceAlt: published?.transmission?.kCalibrated ?? null });
   } }, icon('layers', 16), mcLabel());
   mcBtnRef = mcBtn;

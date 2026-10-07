@@ -197,6 +197,7 @@ export const TIPS = {
   'Live sources': 'Each data series, its publisher, cadence and when it was last retrieved (§3.1).',
   Resilience: 'How the app keeps working when a publisher or host is down (§3.1).',
   Mirrors: 'Independent hosts serving the app and its data.',
+  'Check this device': 'A self-test of the application on the device you are holding: each line is one capability the pages rely on.',
   'Install Phoenix': 'Install the app on this device to use it offline.',
   'Quick start': 'The fastest way through the app.',
   Shortcuts: 'Keyboard shortcuts.',

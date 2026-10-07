@@ -42,11 +42,19 @@ function niceTicks(min, max, n = 5) {
   return out;
 }
 
-function onResize(el, draw) {
-  let w = 0;
+// Charts draw to the width of their host and again when it changes. The layout (ui/balance.js) may ask
+// for a drawing at once, before the next frame, and may give a chart spare height to fill.
+function onResize(el, draw, { byWidth = false, tall = false } = {}) {
+  let w = 0, extra = 0;
+  el.setAttribute('data-fit', byWidth ? 'w' : 'h');
+  el._fit = {
+    byWidth, tall,
+    redraw() { const nw = Math.round(el.clientWidth); if (nw) { w = nw; draw(nw, extra); } },
+    grow(px) { px = Math.max(0, Math.round(px)); if (px !== extra) { extra = px; if (w) draw(w, extra); } },
+  };
   const ro = new ResizeObserver(entries => {
     const nw = Math.round(entries[0].contentRect.width);
-    if (nw && Math.abs(nw - w) > 2) { w = nw; requestAnimationFrame(() => draw(nw)); }
+    if (nw && Math.abs(nw - w) > 2) { w = nw; requestAnimationFrame(() => draw(nw, extra)); }
   });
   ro.observe(el);
 }
@@ -97,9 +105,9 @@ export function lineChart({ series, bands = [], height = 220, yFmt = v => num(v,
   lo = nonNeg && yMin === undefined ? Math.max(0, Math.min(lo, ticks[0])) : Math.min(lo, ticks[0]); hi = Math.max(hi, ticks[ticks.length - 1]);
   const x0 = xs[0], x1 = xs[xs.length - 1] === x0 ? x0 + 1 : xs[xs.length - 1];
 
-  onResize(host, W => {
+  onResize(host, (W, extra = 0) => {
     clear(host);
-    const m = { l: 46, r: 12, t: 10, b: 24 }, H = height;
+    const m = { l: 46, r: 12, t: 10, b: 24 }, H = height + extra;
     const X = v => m.l + (v - x0) / (x1 - x0) * (W - m.l - m.r);
     const Y = v => m.t + (1 - (v - lo) / (hi - lo)) * (H - m.t - m.b);
     const svg = s('svg', { width: W, height: H, viewBox: `0 0 ${W} ${H}`, class: 'svg' });
@@ -170,7 +178,7 @@ export function lineChart({ series, bands = [], height = 220, yFmt = v => num(v,
     host.append(svg);
     // The axis caption is ordinary text below the plot, so a long one wraps instead of being cut off.
     if (xLabel) host.append(h('p', { class: 'chart-cap' }, xLabel));
-  });
+  }, { tall: true });
   return host;
 }
 
@@ -235,7 +243,7 @@ export function heatMatrix({ matrix, labels, fmt = v => num(v, 3), title = '' })
       svg.append(r);
     }));
     host.append(svg, live);
-  });
+  }, { byWidth: true });
   return host;
 }
 
@@ -280,7 +288,7 @@ export function dotMap({ cells, value, color, fmt, size = c => c.gdp, onSelect }
       svg.append(g);
     }
     host.append(svg);
-  });
+  }, { byWidth: true });
   return host;
 }
 

@@ -128,9 +128,20 @@ export function installTips(doc = document) {
     return onPage(el.dataset.tip) ? null : el;
   };
   tipTarget = tipFor;
-  doc.addEventListener('pointerover', e => { lastX = e.clientX; lastY = e.clientY; const el = tipFor(e.target); if (el && el !== cur) show(el); else if (!el && cur) hide(); });
-  doc.addEventListener('pointerdown', e => { if (!e.target.closest?.('[data-tip]')) hide(); });
-  doc.addEventListener('focusin', e => { const el = tipFor(e.target); if (el) show(el); });
+  // On a touch screen a control acts on the first tap. Showing an explanation as the finger lands would
+  // make iOS treat that tap as a hover and withhold the click, so a tapped control shows none; labels,
+  // figures and the ⓘ marks beside controls still explain themselves on a tap.
+  const CONTROL = 'button, a[href], input, select, textarea, summary, [role="button"], [role="tab"]';
+  let touched = 0;
+  const byTouch = e => e.pointerType === 'touch' || e.pointerType === 'pen';
+  doc.addEventListener('pointerover', e => {
+    lastX = e.clientX; lastY = e.clientY;
+    if (byTouch(e) && e.target.closest?.(CONTROL)) { if (cur) hide(); return; }
+    const el = tipFor(e.target);
+    if (el && el !== cur) show(el); else if (!el && cur) hide();
+  });
+  doc.addEventListener('pointerdown', e => { if (byTouch(e)) touched = performance.now(); if (!e.target.closest?.('[data-tip]')) hide(); }, { passive: true });
+  doc.addEventListener('focusin', e => { if (performance.now() - touched < 800 && e.target.closest?.(CONTROL)) return; const el = tipFor(e.target); if (el) show(el); });
   doc.addEventListener('focusout', hide);
   doc.addEventListener('keydown', e => { if (e.key === 'Escape') hide(); });
   addEventListener('scroll', hide, { passive: true });

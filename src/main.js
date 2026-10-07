@@ -61,6 +61,7 @@ const themeBtn = h('button', { class: 'icon-btn', 'aria-label': 'Toggle dark mod
 
 // Install.
 let deferred = null;
+app.routes = ROUTES;
 app.canInstall = false;
 const installBtn = h('button', { class: 'btn btn-s install-btn', hidden: true, 'data-tip': 'Install the app on this device; it then works offline.', onclick: () => app.install() }, icon('download', 16), h('span', null, 'Install'));
 app.install = async () => {
@@ -80,8 +81,9 @@ const regionSel = h('select', { class: 'region', 'aria-label': 'Region', 'data-t
 const livePill = h('button', { class: 'live', onclick: () => { location.hash = '#/data'; } });
 const searchBtn = h('button', { class: 'icon-btn', 'aria-label': 'Search (Ctrl+K)', onclick: () => palette() }, icon('search'));
 const backBtn = h('button', { class: 'icon-btn back-btn', 'aria-label': 'Back', hidden: true, onclick: () => { if (depth > 0) history.back(); else location.hash = '#/overview'; } }, icon('back'));
+const fwdBtn = h('button', { class: 'icon-btn fwd-btn', 'aria-label': 'Forward', hidden: true, 'data-tip': 'Forward to the page you came back from', onclick: () => history.forward() }, icon('back'));
 document.getElementById('top').append(
-  backBtn,
+  backBtn, fwdBtn,
   h('a', { class: 'brand', href: '#/overview', 'data-tip': 'Phoenix Economics: back to the Overview.' }, h('img', { src: globalThis.PHX_ICON || 'icons/icon.svg', width: 28, height: 28, alt: '' }), h('span', null, 'Phoenix', h('small', null, 'Economics'))),
   h('div', { class: 'top-c' }, regionSel),
   h('div', { class: 'top-r' }, livePill, searchBtn, themeBtn, installBtn));
@@ -100,17 +102,19 @@ document.getElementById('tabs').append(...bottomLinks, h('button', { class: 'tab
 
 // In-app history depth, so the back button works inside the app (installed apps have no
 // browser buttons). Each new page gets a sequence number; back/forward restore it.
-let depth = 0;
+// The furthest page reached is remembered, so that the forward button shows only when there is a page ahead.
+let depth = 0, ahead = 0;
 function trackHistory() {
-  if (history.state && typeof history.state.phxDepth === 'number') depth = history.state.phxDepth;
-  else { depth += 1; history.replaceState({ phxDepth: depth }, ''); }
+  if (history.state && typeof history.state.phxDepth === 'number') { depth = history.state.phxDepth; ahead = Math.max(ahead, depth); }
+  else { depth += 1; ahead = depth; history.replaceState({ phxDepth: depth }, ''); }
 }
-try { if (history.state && typeof history.state.phxDepth === 'number') depth = history.state.phxDepth; else history.replaceState({ phxDepth: 0 }, ''); } catch {}
+try { if (history.state && typeof history.state.phxDepth === 'number') ahead = depth = history.state.phxDepth; else history.replaceState({ phxDepth: 0 }, ''); } catch {}
 
 function updateChrome() {
   const atHome = routeOf().id === 'overview';
   backBtn.hidden = depth === 0 && atHome;
   backBtn.dataset.tip = depth > 0 ? 'Back to the previous page' : 'Back to Overview';
+  fwdBtn.hidden = depth >= ahead;
   const r = routeOf();
   for (const a of [...navLinks, ...bottomLinks, ...moreSheet.querySelectorAll('a')]) { if ((a.dataset.id || a.getAttribute('href').slice(2)) === r.id) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); }
   regionSel.value = app.region;
@@ -121,6 +125,15 @@ function updateChrome() {
   livePill.className = `live ${off ? 'off' : app.refreshing ? 'busy' : live ? 'on' : 'stored'}`;
   livePill.replaceChildren(h('span', { class: 'dot', 'aria-hidden': 'true' }), h('span', null, off ? 'Offline' : app.refreshing ? 'Updating' : live ? `Live · ${ago(at)}` : 'Stored data'));
   livePill.dataset.tip = `${live} of ${total} data sources refreshed live in this session; select for the status of each (§3.1).`;
+}
+
+// Previous and next page in the order of the menu, at the foot of every page.
+function pager(r) {
+  const i = ROUTES.indexOf(r), link = (to, cls, word) => to && h('a', { class: cls, href: `#/${to.id}`, rel: cls, 'data-tip': `${word} page: ${to.label}.` },
+    h('span', { class: 'pager-i', 'aria-hidden': 'true' }, icon('back', 18)), h('span', { class: 'pager-t' }, h('small', null, word), h('b', null, to.label)));
+  const prev = link(ROUTES[i - 1], 'prev', 'Previous'), next = link(ROUTES[i + 1], 'next', 'Next');
+  if (next) next.append(next.firstChild);
+  return h('nav', { class: 'pager', 'aria-label': 'Previous and next page' }, prev, next);
 }
 
 // Rendering.
@@ -144,6 +157,7 @@ function render() {
     if (act) (document.getElementById(act) || main.querySelector(`[aria-label="${CSS.escape(act)}"]`))?.focus({ preventScroll: true });
     scrollTo(0, y);
   } else { scrollTo(0, 0); main.focus({ preventScroll: true }); }
+  main.append(pager(r));
   annotate(main);
   balance(main);
   arrange(main);

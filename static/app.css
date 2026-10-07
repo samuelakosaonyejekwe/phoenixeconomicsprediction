@@ -250,6 +250,8 @@ button.bar-row:hover { background: var(--surface-2); }
 .tbl thead th { font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); font-weight: 620; white-space: nowrap; position: sticky; top: 0; background: var(--surface); }
 .tbl td { font-variant-numeric: tabular-nums; }
 .tbl tbody th { font-weight: 560; }
+/* The source names are the longest text of the sources table: they get the room. */
+.tbl-src tbody th { width: 36%; min-width: 15rem; }
 .tbl tr.click { cursor: pointer; }
 .tbl tr.click:hover { background: var(--surface-2); }
 .note { display: block; color: var(--muted); font-weight: 400; font-size: 0.75rem; margin-top: 2px; }
@@ -360,7 +362,7 @@ input[type="range"] { accent-color: var(--brand); height: 22px; }
 .how { background: var(--surface-2); border-radius: 12px; padding: 12px 14px; }
 .how.hl { box-shadow: inset 0 0 0 2px var(--brand); }
 .how ol, .steps { padding-left: 20px; margin: 6px 0 0; }
-.steps li { margin-bottom: 6px; }
+.steps li { margin-bottom: calc(6px + var(--fill, 0px)); }
 .faq details { border-bottom: 1px solid var(--line); padding: 10px 0; }
 .faq summary { cursor: pointer; font-weight: 600; }
 .faq p { color: var(--ink-2); margin-top: 6px; }
@@ -389,6 +391,25 @@ h4 { margin: 10px 0 4px; font-size: 0.86rem; }
 
 .back-btn { margin-left: -6px; color: var(--ink); }
 .back-btn[hidden] { display: none; }
+.fwd-btn { margin-left: -8px; color: var(--ink); }
+.fwd-btn svg { transform: scaleX(-1); }
+.fwd-btn[hidden] { display: none; }
+/* Previous and next page, at the foot of every page. */
+.pager { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 4px; }
+.pager a { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface); color: var(--ink); text-decoration: none; box-shadow: var(--shadow); transition: border-color .15s, transform .15s, background .15s; min-width: 0; }
+.pager a:hover, .pager a:focus-visible { border-color: var(--brand); background: var(--brand-soft); }
+.pager a:hover .pager-i { transform: translateX(-3px); }
+.pager a.next:hover .pager-i { transform: translateX(3px); }
+.pager a.next { justify-content: flex-end; text-align: right; grid-column: 2; }
+.pager-i { flex: none; display: grid; place-items: center; width: 36px; height: 36px; border-radius: 50%; background: var(--brand); color: var(--brand-ink); transition: transform .15s; }
+.pager a.next .pager-i svg { transform: scaleX(-1); }
+.pager-t { display: flex; flex-direction: column; min-width: 0; }
+.pager-t small { color: var(--ink-2); font-size: 0.76rem; text-transform: uppercase; letter-spacing: 0.05em; }
+.pager-t b { font-weight: 620; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pager a:only-child, .pager a.next:only-child { grid-column: 1 / -1; }
+@media (max-width: 700px) { .pager-t b { white-space: normal; } .pager a { padding: 10px 12px; gap: 10px; } }
+@media (prefers-reduced-motion: reduce) { .pager a, .pager-i { transition: none; } }
+@media print { .pager { display: none; } }
 
 /* Explanations on hover, focus and tap (src/ui/annotate.js) */
 .tip.tip-note { max-width: 340px; padding: 8px 11px; line-height: 1.4; }
@@ -405,14 +426,18 @@ button[data-tip], a[data-tip], summary[data-tip], label[data-tip], select[data-t
   .explain > div > p:first-child { margin-top: 0; }
 }
 .grid-3 > .card, .grid-2 > .card { min-width: 0; }
-/* Cards arranged by measured height (ui/balance.js): columns filled independently, long cards across the row. */
-.bal { display: flex; flex-direction: column; }
-.bal-row { display: grid; gap: 16px; }
-.bal-col { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
-/* What difference remains between two columns is shared by the cards of the shorter one. */
-.bal-col > * { flex: 1 1 auto; }
+/* Cards arranged by measured height (ui/balance.js): placed on a fine grid of rows, in document order. */
+.bal { grid-auto-rows: 4px; row-gap: 0; align-items: stretch; }
 .bal-m { align-items: start; }
-.bal-m .bal-col { align-self: start; }
+.bal-m > * { align-self: start; }
+/* Spare height given to a card is taken up by the spacing of its rows, or its content is centred in it. */
+.card > .card-body { margin-top: var(--centre, 0px); }
+:is(.alerts, .flows, .steps, .mirrors) > li, .faq > details { margin-block: var(--fill, 0px); }
+.ctrl-grid { row-gap: calc(12px + 2 * var(--fill, 0px)); }
+.io { row-gap: calc(4px + 2 * var(--fill, 0px)); }
+.bars { gap: calc(4px + 2 * var(--fill, 0px)); }
+.meters { row-gap: calc(10px + 2 * var(--fill, 0px)); }
+.tbl tbody :is(th, td) { padding-block: calc(7px + var(--fill, 0px)); }
 /* A card across the whole row sets its lists and controls in columns. */
 .wide .steps, .wide .alerts, .wide .flows, .wide .mirrors { columns: 2 340px; column-gap: 32px; }
 .wide .steps > li, .wide .alerts > li, .wide .flows > li, .wide .mirrors > li { break-inside: avoid; }
@@ -426,6 +451,7 @@ button[data-tip], a[data-tip], summary[data-tip], label[data-tip], select[data-t
 .opt-k .btn { margin-left: 6px; }
 ul.opt-why { margin: 4px 0 0; padding-left: 18px; font-size: 0.88rem; }
 p.opt-why { color: var(--ink-2); font-size: 0.85rem; margin-top: 8px; }
-.opt-result.flash { animation: optflash 1.2s ease-out 1; }
+.opt-result.flash, .mc-result.flash { animation: optflash 1.2s ease-out 1; border-radius: 10px; }
+.mc-result:focus, .opt-result:focus { outline: none; }
 @keyframes optflash { from { box-shadow: 0 0 0 4px var(--s1); } to { box-shadow: 0 0 0 0 transparent; } }
-@media (prefers-reduced-motion: reduce) { .opt-result.flash { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .opt-result.flash, .mc-result.flash { animation: none; } }

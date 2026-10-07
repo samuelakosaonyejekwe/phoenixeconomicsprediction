@@ -1,6 +1,6 @@
 name: Apple compatibility
 
-# Apple's own Safari and the VoiceOver screen reader on a macOS machine. Started by hand (Actions → Apple
+# Apple's own Safari on macOS, Safari on iOS in Apple's iOS Simulator, and the VoiceOver screen reader. Started by hand (Actions → Apple
 # compatibility → Run workflow); it deploys nothing.
 on:
   workflow_dispatch:
@@ -28,6 +28,29 @@ jobs:
         run: |
           sudo safaridriver --enable
           node e2e/safari.mjs
+
+  ios:
+    runs-on: macos-26
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Safari on iOS, in the iOS Simulator
+        run: |
+          UDID=$(xcrun simctl list devices available -j | node -e "const d=JSON.parse(require('fs').readFileSync(0));const all=Object.entries(d.devices).filter(([k])=>/iOS/.test(k)).sort().reverse().flatMap(([,v])=>v).filter(x=>/^iPhone/.test(x.name));console.log(all[0].udid)")
+          xcrun simctl boot "$UDID"
+          xcrun simctl bootstatus "$UDID" -b
+          xcrun simctl list devices booted
+          open -a Simulator
+          xcrun simctl launch "$UDID" com.apple.mobilesafari
+          sleep 30
+          sudo safaridriver --enable
+          PHX_IOS=1 node e2e/safari.mjs
 
   voiceover:
     runs-on: macos-14

@@ -114,6 +114,28 @@ await page.getByRole('button', { name: 'Optimise k_A' }).click();
 // Element-based waiting: evaluating script in the page would be blocked by the app's own CSP.
 const kaOk = await page.locator('.opt-result', { hasText: /Without absorption, \d+ econom|No economy would still be above/ }).waitFor({ timeout: 120000 }).then(() => true).catch(() => false);
 if (!kaOk) fail('Optimise k_A gave no answer'); else console.log('ok k_A feasibility search');
+await page.waitForTimeout(1500);
+if (!(await page.locator('.opt-result').evaluate(e => { const r = e.getBoundingClientRect(); return r.top >= 0 && r.top < innerHeight; }))) fail('the k_A result is not in view after the search');
+await page.getByRole('button', { name: 'Run stress test' }).click();
+const mcOk = await page.locator('.mc-result .kpis').waitFor({ timeout: 300000 }).then(() => true).catch(() => false);
+await page.waitForTimeout(1500);
+if (!mcOk) fail('the stress test gave no result');
+else if (!(await page.locator('.mc-result').evaluate(e => { const r = e.getBoundingClientRect(); return r.top >= 0 && r.top < innerHeight; }))) fail('the stress-test result is not in view after the run');
+else console.log('ok stress test runs and shows its result');
+
+// The on-device check passes, and the foot of the page leads to the neighbouring pages.
+await page.goto(base + '#/data');
+await page.getByRole('button', { name: 'Run the checks' }).click();
+const device = await page.locator('.device-report').innerText({ timeout: 120000 }).catch(() => '');
+if (!/All checks passed/.test(device)) fail(`on-device check: ${device.slice(0, 600)}`); else console.log('ok on-device check');
+await page.locator('.pager a.prev').click();
+await page.locator('main h1', { hasText: 'Evidence' }).waitFor({ timeout: 20000 }).then(() => console.log('ok previous-page arrow')).catch(() => fail('the previous-page arrow did not open Evidence'));
+await page.locator('.pager a.next').click();
+await page.locator('main h1', { hasText: 'Data' }).waitFor({ timeout: 20000 }).then(() => console.log('ok next-page arrow')).catch(() => fail('the next-page arrow did not open Data & status'));
+await page.getByRole('button', { name: 'Back' }).click();
+await page.locator('main h1', { hasText: 'Evidence' }).waitFor({ timeout: 20000 }).catch(() => fail('Back did not return to Evidence'));
+await page.getByRole('button', { name: 'Forward' }).click();
+await page.locator('main h1', { hasText: 'Data' }).waitFor({ timeout: 20000 }).then(() => console.log('ok back and forward buttons')).catch(() => fail('Forward did not return to Data & status'));
 
 // Reproduce the paper on the Evidence page.
 await page.goto(base + '#/validate');

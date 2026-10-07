@@ -13,26 +13,82 @@ export function balance(root = document) {
     const fit = Math.max(1, Math.floor((W + gap) / (min + gap)));
     const cols = Math.ceil(n / Math.ceil(n / fit));
     g.style.gridTemplateColumns = `repeat(${cols}, minmax(0, 1fr))`;
+    if (cols === n && n > 1) widths(g, n);
   }
 }
 
+// Items on a single row need not be equally wide: one with more to say is given more room, so that the
+// others are not left taller than their content.
+function widths(g, n) {
+  const items = [...g.children], set = w => { g.style.gridTemplateColumns = w.map(x => `minmax(0, ${x.toFixed(3)}fr)`).join(' '); };
+  const spread = () => { const hs = items.map(it => it.offsetHeight); return { hs, d: Math.max(...hs) - Math.min(...hs) }; };
+  g.style.alignItems = 'start';
+  let w = new Array(n).fill(1), best = { w, d: spread().d };
+  for (let i = 0; i < 5 && best.d > 28; i++) {
+    const { hs } = spread(), mean = hs.reduce((a, b) => a + b, 0) / n;
+    w = w.map((x, k) => Math.min(1.9, Math.max(0.8, x * (hs[k] / mean) ** 0.8)));
+    set(w);
+    const d = spread().d;
+    if (d < best.d - 4) best = { w, d };
+  }
+  if (best.w.every(x => x === 1)) g.style.gridTemplateColumns = `repeat(${n}, minmax(0, 1fr))`; else set(best.w);
+  g.style.alignItems = '';
+}
+
+
 // Cards side by side. A grid row makes its cards equally tall, which leaves a short card hollow next
 // to a long one. Instead the cards are measured at column width and at full width and arranged so
-// that the least area is left empty: each card goes into a column or across the whole row, columns
-// are filled independently, and what little difference remains is taken up by the last card of the
-// shorter column. Rows of similar cards are left as they are.
+// that the least area is left empty: each card goes into a column or across the whole row and the
+// columns are filled independently. The cards stay in reading order in the document — a keyboard and a
+// screen reader meet them in the order the page was written — and are placed on a fine grid of rows.
+// What difference remains between two columns is shared by the cards of the shorter one, whose charts
+// and lists take it up. Rows of similar cards are left as rows.
 const PAIRS = '.grid-2, .grid-3';
-const GAP = 16, FULL = -1, SPAN_COST = 55, EVEN = 48;
+const GAP = 16, UNIT = 4, FULL = -1, SPAN_COST = 55, EVEN = 48;
 const SPLITS = [0.5, 0.46, 0.54, 0.42, 0.58, 0.38, 0.62];
 const plans = new Map();
-const frames = n => new Promise(done => { const step = () => (n-- > 0 ? requestAnimationFrame(step) : done()); step(); });
 const columnsFor = g => (matchMedia('(max-width: 1100px)').matches ? 1 : g.classList.contains('grid-3') && matchMedia('(min-width: 1400px)').matches ? 3 : 2);
 const titleOf = el => el.querySelector('h3')?.firstChild?.textContent || el.className;
+const up = v => Math.ceil(v / UNIT) * UNIT;
+
+// Charts are drawn at once at the width they now have, not a frame later: those whose height follows
+// their width, and those not drawn yet.
+function draw(g, all = false) {
+  for (const host of g.querySelectorAll('[data-fit]')) if (host._fit && (all || host._fit.byWidth || !host.firstElementChild)) host._fit.redraw();
+}
+
+// Spare height given to a card is taken up by its charts, or by the spacing of its rows.
+const ROWS = '.alerts, .flows, .steps, .mirrors, .io, .ctrl-grid, .bars, .meters, .tbl tbody, .faq';
+function unfill(it) {
+  if (!it._fill && !it._want) return;
+  for (const host of it.querySelectorAll('[data-fit]')) host._fit?.grow(0);
+  it.style.removeProperty('--fill');
+  it.style.removeProperty('--centre');
+  it._fill = it._want = 0;
+}
+// `natural` is the card's height without any filling; returns the height taken up.
+function fill(it, spare, natural) {
+  if (Math.abs(spare - (it._want || 0)) < 6) return;
+  unfill(it);
+  it._want = spare;
+  if (spare < 8) return;
+  const charts = [...it.querySelectorAll('[data-fit]')].filter(c => c._fit?.tall && c.clientWidth);
+  if (charts.length) for (const c of charts) c._fit.grow(spare / charts.length);
+  else {
+    const list = [...it.querySelectorAll(ROWS)].filter(l => l.clientHeight && l.children.length > 1).sort((a, b) => b.clientHeight - a.clientHeight)[0];
+    // Nothing in the card can grow (a map of fixed proportions): its content is centred in the space.
+    if (!list) it.style.setProperty('--centre', `${Math.floor(spare / 2)}px`);
+    else {
+      const rows = Math.max(1, Math.round(list.clientHeight / Math.max(12, list.firstElementChild.offsetHeight)));
+      it.style.setProperty('--fill', `${Math.min(9, spare / (2 * rows)).toFixed(1)}px`);
+    }
+  }
+  it._fill = Math.max(0, it.offsetHeight - natural);
+}
 
 function flat(g, items) {
   g.classList.remove('bal', 'bal-m');
-  for (const it of items) it.classList.remove('wide');
-  if (g.children.length !== items.length || items.some((it, i) => g.children[i] !== it)) g.replaceChildren(...items);
+  for (const it of items) { it.classList.remove('wide'); it.style.gridColumn = it.style.gridRow = ''; }
 }
 
 // Segments of columns between full-width cards, in reading order.
@@ -78,114 +134,125 @@ function solve(hCol, hFull, C) {
   return best;
 }
 
-function build(g, items, plan, C) {
-  g._plan = plan;
-  g._built = performance.now();
-  if (plan.rows) {
-    flat(g, items);
-    g.style.gridTemplateColumns = plan.split?.[0] ? `${plan.split[0]}fr ${1 - plan.split[0]}fr` : `repeat(${C}, minmax(0, 1fr))`;
-    items.forEach((it, i) => { it.style.gridColumn = i === items.length - 1 && items.length % C === 1 ? '1 / -1' : ''; });
-    return;
-  }
-  g.style.gridTemplateColumns = '';
-  let r = 0;
-  const nodes = segments(plan.assign).map(seg => {
-    if (seg.full !== undefined) { items[seg.full].classList.add('wide'); return items[seg.full]; }
-    const row = document.createElement('div'), f = plan.split?.[r++];
-    row.className = 'bal-row';
-    row.style.gridTemplateColumns = f ? `${f}fr ${1 - f}fr` : `repeat(${C}, minmax(0, 1fr))`;
-    for (let c = 0; c < C; c++) {
-      const col = document.createElement('div');
-      col.className = 'bal-col';
-      for (const i of seg.cols[c] || []) { items[i].classList.remove('wide'); col.append(items[i]); }
-      row.append(col);
-    }
-    return row;
-  });
-  for (const it of items) it.style.gridColumn = '';
-  g.classList.add('bal');
-  g.replaceChildren(...nodes);
-}
-
-// Two columns need not be equally wide: the split that brings their heights closest is kept.
-function tune(g, C) {
-  const plan = g._plan;
-  const rows = plan.rows ? (g._items.length === 2 ? [g] : []) : [...g.querySelectorAll(':scope > .bal-row')];
-  if (C !== 2 || !rows.length) return;
+// The cards' own heights, without stretching and without any filling.
+function natural(g) {
   g.classList.add('bal-m');
-  plan.split = rows.map(row => {
-    let best = null;
-    for (const f of SPLITS) {
-      row.style.gridTemplateColumns = `${f}fr ${1 - f}fr`;
-      const d = Math.abs(row.children[0].offsetHeight - row.children[1].offsetHeight);
-      if (!best || d < best.d - 20) best = { f, d };
-      if (d <= 20) break;
-    }
-    row.style.gridTemplateColumns = `${best.f}fr ${1 - best.f}fr`;
-    return best.f;
-  });
+  const hs = g._items.map(it => it.offsetHeight - (it._fill || 0));
   g.classList.remove('bal-m');
-  plan.worst = drawn(g, C).worst;
+  return hs;
 }
 
-// The largest hollow left in the arrangement as drawn, and the heights of its cards.
-function drawn(g, C) {
-  g.classList.add('bal-m');
+// Places the cards of the chosen arrangement from their present heights. Returns the largest
+// difference between columns that had to be shared out.
+function place(g, C) {
+  const plan = g._plan, items = g._items, hs = natural(g);
+  g._nat = hs.join();
   let worst = 0;
-  const hs = g._items.map(it => it.offsetHeight);
-  if (g._plan.rows) for (let i = 0; i + C <= hs.length; i += C) worst = Math.max(worst, Math.max(...hs.slice(i, i + C)) - Math.min(...hs.slice(i, i + C)));
-  else for (const row of g.querySelectorAll(':scope > .bal-row')) {
-    const cols = [...row.children].map(c => c.offsetHeight);
-    worst = Math.max(worst, Math.max(...cols) - Math.min(...cols));
+  const give = [];
+  if (plan.rows) {
+    for (let i = 0; i < items.length; i += C) {
+      const row = hs.slice(i, i + C), top = Math.max(...row);
+      if (row.length === C) worst = Math.max(worst, top - Math.min(...row));
+      row.forEach((v, k) => { give[i + k] = top - v; });
+    }
+  } else {
+    let y = 0;
+    const at = (i, c, top, height) => { items[i].style.gridColumn = c === FULL ? '1 / -1' : String(c + 1); items[i].style.gridRow = `${top / UNIT + 1} / span ${height / UNIT}`; give[i] = height - hs[i]; };
+    for (const seg of segments(plan.assign)) {
+      if (seg.full !== undefined) { const v = up(hs[seg.full]); at(seg.full, FULL, y, v); y += v + GAP; continue; }
+      const cols = Array.from({ length: C }, (_, c) => seg.cols[c] || []);
+      const sums = cols.map(col => col.reduce((a, i) => a + up(hs[i]) + GAP, -GAP));
+      const top = Math.max(...sums);
+      cols.forEach((col, c) => {
+        // The spare height of a shorter column is shared by its cards, in whole rows.
+        const spare = top - sums[c], each = Math.floor(spare / col.length / UNIT) * UNIT;
+        if (col.length) worst = Math.max(worst, spare);
+        let cy = y;
+        col.forEach((i, k) => { const v = up(hs[i]) + (k === col.length - 1 ? spare - each * (col.length - 1) : each); at(i, c, cy, v); cy += v + GAP; });
+      });
+      y += top + GAP;
+    }
   }
+  // Charts and lists take up what their card was given.
+  g.classList.add('bal-m');
+  items.forEach((it, i) => fill(it, give[i] || 0, hs[i]));
   g.classList.remove('bal-m');
   return { worst, sig: hs.map(v => Math.round(v / 24)).join() };
 }
 
-async function measure(g, items, C, key) {
-  const run = g._run = (g._run || 0) + 1;
-  const stale = () => !g.isConnected || g._run !== run;
-  g.style.visibility = 'hidden';
-  try {
-    flat(g, items);
-    for (const it of items) it.style.gridColumn = '';
-    g.classList.add('bal-m');
-    g.style.gridTemplateColumns = `repeat(${C}, minmax(0, 1fr))`;
-    await frames(3); if (stale()) return;
-    const hCol = items.map(it => it.offsetHeight);
-    g.style.gridTemplateColumns = 'minmax(0, 1fr)';
-    for (const it of items) it.classList.add('wide');
-    await frames(3); if (stale()) return;
-    const hFull = items.map(it => it.offsetHeight);
-    const plan = solve(hCol, hFull, C);
-    plans.set(key, plan);
-    g.classList.remove('bal-m');
-    build(g, items, plan, C);
-    tune(g, C);
-  } finally { if (g._run === run) g.style.visibility = ''; }
+function build(g, items, plan, C) {
+  g._plan = plan;
+  g._built = performance.now();
+  flat(g, items);
+  g.style.gridTemplateColumns = plan.split ? `${plan.split}fr ${1 - plan.split}fr` : `repeat(${C}, minmax(0, 1fr))`;
+  if (plan.rows) items.forEach((it, i) => { it.style.gridColumn = i === items.length - 1 && items.length % C === 1 ? '1 / -1' : ''; });
+  else {
+    g.classList.add('bal');
+    plan.assign.forEach((a, i) => items[i].classList.toggle('wide', a === FULL));
+  }
+  draw(g);
+  return place(g, C);
 }
 
-// Charts draw a few frames after their card is placed, so the arrangement is judged once it has settled.
-const SETTLE = 500;
+// Two columns need not be equally wide: the split that brings their heights closest is kept.
+function tune(g, C) {
+  const plan = g._plan, items = g._items;
+  if (C !== 2 || (plan.rows && items.length !== 2)) return;
+  const pairs = plan.rows ? [[[0], [1]]] : segments(plan.assign).filter(s => s.cols).map(s => [s.cols[0] || [], s.cols[1] || []]);
+  if (!pairs.length) return;
+  let best = null;
+  for (const f of SPLITS) {
+    g.style.gridTemplateColumns = `${f}fr ${1 - f}fr`;
+    draw(g);
+    const hs = natural(g), sum = col => col.reduce((a, i) => a + hs[i] + GAP, -GAP);
+    const d = Math.max(...pairs.map(([a, b]) => Math.abs(sum(a) - sum(b))));
+    if (!best || d < best.d - 20) best = { f, d };
+    if (d <= 20) break;
+  }
+  plan.split = best.f === 0.5 ? undefined : best.f;
+  g.style.gridTemplateColumns = `${best.f}fr ${1 - best.f}fr`;
+  draw(g);
+  plan.worst = place(g, C).worst;
+}
+
+// Measured within one frame: nothing is hidden and nothing is seen to move.
+function measure(g, items, C, key) {
+  flat(g, items);
+  for (const it of items) unfill(it);
+  g.classList.add('bal-m');
+  g.style.gridTemplateColumns = `repeat(${C}, minmax(0, 1fr))`;
+  draw(g, true);
+  const hCol = items.map(it => it.offsetHeight);
+  g.style.gridTemplateColumns = 'minmax(0, 1fr)';
+  for (const it of items) it.classList.add('wide');
+  draw(g);
+  const hFull = items.map(it => it.offsetHeight);
+  g.classList.remove('bal-m');
+  const plan = solve(hCol, hFull, C);
+  plans.set(key, plan);
+  build(g, items, plan, C);
+  tune(g, C);
+}
+
+// A card may go on changing for a few frames (data arriving, a table opening); the arrangement is
+// judged once it has settled.
+const SETTLE = 400;
 function check(g, C, key) {
   if (g._checking) return;
   g._checking = true;
   setTimeout(() => {
     g._checking = false;
-    if (!g.isConnected || !g._plan || g._key !== key || g.style.visibility) return;
+    if (!g.isConnected || !g._plan || g._key !== key) return;
     if (performance.now() - g._built < SETTLE) return check(g, C, key);
-    // Measured again only when the cards have changed height since the arrangement was chosen (a table
+    // Chosen again only when the cards have changed height since the arrangement was chosen (a table
     // opened, new data), so a difference that cannot be removed is not chased.
-    const plan = g._plan, now = drawn(g, C);
-    if (plan.sig === undefined) {
-      // A card that changed while it was being measured: once more, and only once.
-      if (now.worst > plan.worst + 2 * EVEN && !g._again) { g._again = true; return measure(g, g._items, C, key); }
-      plan.sig = now.sig; plan.worst = Math.min(Math.max(plan.worst, now.worst), plan.worst + 2 * EVEN);
-    } else if (now.sig !== plan.sig && now.worst > plan.worst + EVEN) { g._again = false; measure(g, g._items, C, key); }
+    const plan = g._plan, now = place(g, C);
+    if (plan.sig === undefined) { plan.sig = now.sig; plan.worst = Math.min(Math.max(plan.worst, now.worst), plan.worst + 2 * EVEN); }
+    else if (now.sig !== plan.sig && now.worst > plan.worst + EVEN) measure(g, g._items, C, key);
   }, Math.max(50, SETTLE - (performance.now() - g._built) + 20));
 }
 
-// A card that changes height (a table view opened, a chart redrawn) has its group looked at again.
+// A card that changes height (a table view opened, a chart redrawn) is given its new place at once.
 const watch = typeof ResizeObserver === 'function' ? new ResizeObserver(entries => {
   for (const g of new Set(entries.map(e => e.target.closest(PAIRS)))) if (g) arrange(g);
 }) : null;
@@ -197,17 +264,21 @@ export function arrange(root = document) {
   if (own) grids.add(own);
   for (const g of grids) {
     if (g.closest('.card')) continue;
-    // The cards of the grid in reading order; a stack of cards is laid out with the rest.
-    if (!g._items) { g._items = [...g.children].flatMap(c => (c.classList.contains('stack') ? [...c.children] : [c])); for (const it of g._items) watch?.observe(it); }
+    if (!g._items) {
+      // A stack of cards is laid out with the rest: its cards join the grid in reading order.
+      for (const c of [...g.children]) if (c.classList.contains('stack')) c.replaceWith(...c.children);
+      g._items = [...g.children];
+      for (const it of g._items) watch?.observe(it);
+    }
     const items = g._items, C = columnsFor(g);
     if (items.length < 2 || items.length > 9 || !g.clientWidth) continue;
-    if (C === 1) { if (g._key !== 'flat') { g._key = 'flat'; g._run = (g._run || 0) + 1; g._plan = null; flat(g, items); g.style.gridTemplateColumns = ''; for (const it of items) it.style.gridColumn = ''; } continue; }
+    if (C === 1) { if (g._key !== 'flat') { g._key = 'flat'; g._plan = null; flat(g, items); for (const it of items) unfill(it); g.style.gridTemplateColumns = ''; } continue; }
     const key = [location.hash.split('?')[0], C, Math.round(g.clientWidth / 24), ...items.map(titleOf)].join('|');
     if (g._key !== key) {
       g._key = key;
       const plan = plans.get(key);
-      if (plan) build(g, items, plan, C); else { measure(g, items, C, key); continue; }
-    }
+      if (plan) build(g, items, plan, C); else measure(g, items, C, key);
+    } else if (g._plan && natural(g).join() !== g._nat) place(g, C);
     check(g, C, key);
   }
 }

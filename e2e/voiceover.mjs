@@ -33,7 +33,13 @@ async function read(route, steps) {
 try {
   await voiceOver.start();
   for (const [route, name, expect] of [['overview', 'Overview', /closed loop|monitor|Priority alerts|Daily drivers/i], ['guide', 'Guide', /Install Phoenix|Quick start|Shortcuts|Questions/i]]) {
-    const { spoken, headings } = await read(route, 60);
+    // VoiceOver's cursor sometimes stays outside the page on a first pass: the page is read up to three times.
+    let spoken = [], headings = [];
+    for (let pass = 0; pass < 3; pass++) {
+      ({ spoken, headings } = await read(route, 60));
+      if (headings.some(p => /heading/i.test(p) && expect.test(p)) && new Set(spoken).size > spoken.length / 3) break;
+      console.log(`${route}: pass ${pass + 1} did not enter the page`);
+    }
     console.log(`--- ${route}: spoken\n${spoken.join('\n')}\n--- ${route}: headings\n${headings.join('\n')}`);
     const all = spoken.concat(headings);
     if (!all.some(p => /Phoenix/i.test(p))) fail(`${route}: the application's name was never announced`);
