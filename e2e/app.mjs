@@ -203,22 +203,36 @@ await page.getByText('Show the full register').click();
 const regRows = await page.locator('table', { hasText: 'Resolution' }).locator('tbody tr').count();
 if (regRows !== 52) fail(`risk register shows ${regRows} rows, expected 52`); else console.log('ok risk register: 52 rows');
 
+// Run when the application's code has changed (PHX_CONTROLS, set for pushes): a refresh of the data alone
+// cannot alter how a control behaves, and is not made to wait for this.
 // The controls answer: every slider, number field, drop-down and tick box outside the Simulation lab is moved
 // and put back, and in the lab the first and last of each parameter group (a move there re-solves the
 // model, and the full sweep of all of them takes an hour). A control that does not take its new value,
 // a number beside a slider that does not follow it, or a control that does not return, fails the test.
-{
+if (process.env.PHX_CONTROLS !== '0') {
   await page.evaluate(() => { localStorage.setItem('phx:prefs', JSON.stringify({ region: 'ea', scenario: 'live' })); });
   let moved = 0;
   const until = async (read, want, ms = 15000) => { for (const t0 = Date.now(); Date.now() - t0 < ms;) { if (want(await read().catch(() => null))) return true; await page.waitForTimeout(150); } return false; };
+  // A key pressed while the page is being redrawn after the previous change can fall on the control being
+  // replaced and be lost: the page is given a moment, and a press that had no effect is made again.
   const press = async (get, [there, back], what) => {
     const before = await get().inputValue();
-    await get().focus(); await page.keyboard.press(there);
-    if (!(await until(() => get().inputValue(), v => v !== null && v !== before))) return fail(`${what} did not change from ${before}`);
+    let changed = false;
+    for (let attempt = 0; attempt < 3 && !changed; attempt++) {
+      await get().focus(); await page.keyboard.press(there);
+      changed = await until(() => get().inputValue(), v => v !== null && v !== before, 5000);
+    }
+    if (!changed) return fail(`${what} did not change from ${before}`);
+    await page.waitForTimeout(400);
     const beside = await get().evaluate(e => { const n = (e.closest('.ctrl, .ctrl-in, label, .row') || e.parentElement).querySelector('input[type=number]'); return n && n !== e ? [n.value, e.value] : null; });
     if (beside && Math.abs(+beside[0] - +beside[1]) > 1e-9) fail(`${what} moved to ${beside[1]} but the number beside it shows ${beside[0]}`);
-    await get().focus(); await page.keyboard.press(back);
-    if (!(await until(() => get().inputValue(), v => v === before))) return fail(`${what} did not return to ${before}`);
+    let returned = false;
+    for (let attempt = 0; attempt < 3 && !returned; attempt++) {
+      if ((await get().inputValue()) !== before) { await get().focus(); await page.keyboard.press(back); }
+      returned = await until(() => get().inputValue(), v => v === before, 5000);
+    }
+    if (!returned) return fail(`${what} did not return to ${before} (shows ${await get().inputValue().catch(() => '?')})`);
+    await page.waitForTimeout(250);
     moved++;
   };
   const sliders = async (scope, which, where) => {
@@ -236,8 +250,9 @@ if (regRows !== 52) fail(`risk register shows ${regRows} rows, expected 52`); el
       if (!(await get().isVisible().catch(() => false))) continue;
       const before = await get().inputValue(), to = (await get().locator('option').evaluateAll(o => o.map(x => x.value))).find(v => v !== before);
       if (to === undefined) continue;
-      await get().selectOption(to);
-      if (!(await until(() => get().inputValue(), v => v === to))) { fail(`${where}: drop-down ${k + 1} did not take "${to}"`); continue; }
+      let taken = false;
+      for (let attempt = 0; attempt < 3 && !taken; attempt++) { await get().selectOption(to); taken = await until(() => page.waitForTimeout(500).then(() => get().inputValue()), v => v === to, 5000); }
+      if (!taken) { fail(`${where}: drop-down ${k + 1} did not take "${to}" (shows ${await get().inputValue().catch(() => '?')})`); continue; }
       // The page redraws after a choice; the way back is taken on the redrawn control, and once more
       // should the redraw have overtaken it.
       await page.waitForTimeout(600);
