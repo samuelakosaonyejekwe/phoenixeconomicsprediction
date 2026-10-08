@@ -163,13 +163,16 @@ await page.getByRole('button', { name: 'Optimise k_A' }).click();
 // Element-based waiting: evaluating script in the page would be blocked by the app's own CSP.
 const kaOk = await page.locator('.opt-result', { hasText: /Without absorption, \d+ econom|No economy would still be above/ }).waitFor({ timeout: 120000 }).then(() => true).catch(() => false);
 if (!kaOk) fail('Optimise k_A gave no answer'); else console.log('ok k_A feasibility search');
-await page.waitForTimeout(1500);
-if (!(await page.locator('.opt-result').evaluate(e => { const r = e.getBoundingClientRect(); return r.top >= 0 && r.top < innerHeight; }))) fail('the k_A result is not in view after the search');
+let kaSeen = false;
+for (let k = 0; k < 20 && !kaSeen; k++) { await page.waitForTimeout(500); kaSeen = await page.locator('.opt-result').evaluate(e => { const r = e.getBoundingClientRect(); return r.top >= 0 && r.top < innerHeight; }).catch(() => false); }
+if (!kaSeen) fail('the k_A result is not in view after the search');
 await page.getByRole('button', { name: 'Run stress test' }).click();
 const mcOk = await page.locator('.mc-result .kpis').waitFor({ timeout: 300000 }).then(() => true).catch(() => false);
-await page.waitForTimeout(1500);
+// Brought into view within a few seconds, however busy the machine.
+let mcSeen = false;
+for (let k = 0; k < 20 && mcOk && !mcSeen; k++) { await page.waitForTimeout(500); mcSeen = await page.locator('.mc-result').evaluate(e => { const r = e.getBoundingClientRect(); return r.top >= 0 && r.top < innerHeight; }).catch(() => false); }
 if (!mcOk) fail('the stress test gave no result');
-else if (!(await page.locator('.mc-result').evaluate(e => { const r = e.getBoundingClientRect(); return r.top >= 0 && r.top < innerHeight; }))) fail('the stress-test result is not in view after the run');
+else if (!mcSeen) fail('the stress-test result is not in view after the run');
 else console.log('ok stress test runs and shows its result');
 
 // The on-device check passes, and the foot of the page leads to the neighbouring pages.
@@ -199,6 +202,88 @@ else console.log(`ok reproduction: ${m[1]} of ${m[2]} values`);
 await page.getByText('Show the full register').click();
 const regRows = await page.locator('table', { hasText: 'Resolution' }).locator('tbody tr').count();
 if (regRows !== 52) fail(`risk register shows ${regRows} rows, expected 52`); else console.log('ok risk register: 52 rows');
+
+// The controls answer: every slider, number field, drop-down and tick box outside the Simulation lab is moved
+// and put back, and in the lab the first and last of each parameter group (a move there re-solves the
+// model, and the full sweep of all of them takes an hour). A control that does not take its new value,
+// a number beside a slider that does not follow it, or a control that does not return, fails the test.
+{
+  await page.evaluate(() => { localStorage.setItem('phx:prefs', JSON.stringify({ region: 'ea', scenario: 'live' })); });
+  let moved = 0;
+  const until = async (read, want, ms = 15000) => { for (const t0 = Date.now(); Date.now() - t0 < ms;) { if (want(await read().catch(() => null))) return true; await page.waitForTimeout(150); } return false; };
+  const press = async (get, [there, back], what) => {
+    const before = await get().inputValue();
+    await get().focus(); await page.keyboard.press(there);
+    if (!(await until(() => get().inputValue(), v => v !== null && v !== before))) return fail(`${what} did not change from ${before}`);
+    const beside = await get().evaluate(e => { const n = (e.closest('.ctrl, .ctrl-in, label, .row') || e.parentElement).querySelector('input[type=number]'); return n && n !== e ? [n.value, e.value] : null; });
+    if (beside && Math.abs(+beside[0] - +beside[1]) > 1e-9) fail(`${what} moved to ${beside[1]} but the number beside it shows ${beside[0]}`);
+    await get().focus(); await page.keyboard.press(back);
+    if (!(await until(() => get().inputValue(), v => v === before))) return fail(`${what} did not return to ${before}`);
+    moved++;
+  };
+  const sliders = async (scope, which, where) => {
+    const n = await scope().locator('input[type=range]').count();
+    for (const k of which(n)) {
+      const get = () => scope().locator('input[type=range]').nth(k);
+      if (!(await get().isVisible().catch(() => false))) continue;
+      const atMax = +(await get().inputValue()) >= +(await get().getAttribute('max'));
+      await press(get, atMax ? ['ArrowLeft', 'ArrowRight'] : ['ArrowRight', 'ArrowLeft'], `${where}: slider ${k + 1} of ${n}`);
+    }
+  };
+  const others = async (scope, where) => {
+    for (let k = 0; k < await scope().locator('select').count(); k++) {
+      const get = () => scope().locator('select').nth(k);
+      if (!(await get().isVisible().catch(() => false))) continue;
+      const before = await get().inputValue(), to = (await get().locator('option').evaluateAll(o => o.map(x => x.value))).find(v => v !== before);
+      if (to === undefined) continue;
+      await get().selectOption(to);
+      if (!(await until(() => get().inputValue(), v => v === to))) { fail(`${where}: drop-down ${k + 1} did not take "${to}"`); continue; }
+      // The page redraws after a choice; the way back is taken on the redrawn control, and once more
+      // should the redraw have overtaken it.
+      await page.waitForTimeout(600);
+      await get().selectOption(before);
+      if (!(await until(() => get().inputValue(), v => v === before, 6000))) { await page.waitForTimeout(600); await get().selectOption(before); }
+      if (!(await until(() => get().inputValue(), v => v === before))) fail(`${where}: drop-down ${k + 1} did not return to "${before}"`); else moved++;
+    }
+    for (let k = 0; k < await scope().locator('input[type=checkbox]').count(); k++) {
+      const get = () => scope().locator('input[type=checkbox]').nth(k);
+      if (!(await get().isVisible().catch(() => false))) continue;
+      const before = await get().isChecked();
+      await get().click();
+      if (!(await until(() => get().isChecked(), v => v === !before))) { fail(`${where}: tick box ${k + 1} did not change`); continue; }
+      await page.waitForTimeout(600);
+      await get().click();
+      if (!(await until(() => get().isChecked(), v => v === before))) fail(`${where}: tick box ${k + 1} did not return`); else moved++;
+    }
+    const n = await scope().locator('input[type=number]').count();
+    for (const k of n ? [0, n - 1].filter((v, i, a) => a.indexOf(v) === i) : []) {
+      const get = () => scope().locator('input[type=number]').nth(k);
+      if (!(await get().isVisible().catch(() => false))) continue;
+      const atMax = (await get().getAttribute('max')) !== null && +(await get().inputValue()) >= +(await get().getAttribute('max'));
+      await press(get, atMax ? ['ArrowDown', 'ArrowUp'] : ['ArrowUp', 'ArrowDown'], `${where}: number field ${k + 1} of ${n}`);
+    }
+  };
+  const all = n => Array.from({ length: n }, (_, k) => k), ends = n => (n ? [...new Set([0, n - 1])] : []);
+  for (const r of ['detect', 'contracts', 'pilot', 'signals', 'markets', 'programmes', 'redistribute', 'framework']) {
+    await page.goto(base + '#/' + r);
+    await page.waitForTimeout(1500);
+    await sliders(() => page.locator('main'), all, r);
+    await others(() => page.locator('main'), r);
+  }
+  await page.goto(base + '#/simulate');
+  await page.waitForTimeout(3000);
+  const groups = await page.locator('main .acc > details').count();
+  for (let g = 0; g < groups; g++) {
+    const scope = () => page.locator('main .acc > details').nth(g), summary = () => scope().locator('summary'), name = (await summary().innerText()).split('\n')[0];
+    if (!(await scope().evaluate(d => d.open))) await summary().click();
+    if (!(await until(() => scope().locator('input[type=range], select, input[type=checkbox]').count(), n => n > 0))) { fail(`simulate: the group "${name}" opened without controls`); continue; }
+    await sliders(scope, ends, `simulate / ${name}`);
+    await others(scope, `simulate / ${name}`);
+    // Left as the page opens: only the group it starts with is open.
+    if (g !== 2) { await summary().click(); await until(() => scope().evaluate(d => d.open), v => v === false); }
+  }
+  console.log(`ok ${moved} controls answered and returned to their value`);
+}
 
 if (errors.length) fail(`browser errors:\n${errors.slice(0, 10).join('\n')}`);
 

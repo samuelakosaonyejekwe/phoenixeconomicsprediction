@@ -69,6 +69,7 @@ function reveal(el) {
   };
   setTimeout(() => show(true), 60);
   setTimeout(() => show(false), 700);
+  setTimeout(() => show(false), 2200);
 }
 
 const FIELDS = {
