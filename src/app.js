@@ -103,21 +103,71 @@ export function createApp() {
   };
   app.marketPath = () => (SCENARIOS[app.scenario].asOf ? app.data.expect?.forwardsEpisode : app.data.expect?.forwards) || null;
   app.effParams = () => ({ ...app.params, ...(SCENARIOS[app.scenario].patch || {}) });
+  // Solved runs are kept by region, scenario, parameters and data, so that going back to a scenario, or
+  // to one prepared in an idle moment, costs nothing. Where the policy rate follows the market path a run
+  // with Phoenix needs the run without it as its baseline: that run is kept too and handed over, where
+  // the engine would otherwise solve it a second time (the result is the same).
   app.sim = (phx = true, override) => {
     const P = { ...app.effParams(), ...(override || {}) };
     const key = JSON.stringify([app.region, app.scenario, phx, P, app.dataStamp, app.data.weoVintages ? 1 : 0]);
     if (!memo.has(key)) {
       const cells = app.simCells();
       if (!cells.length) return null;
-      const sc = SCENARIOS[app.scenario];
-      memo.set(key, simulate(cells, P, sc, { phx, prep: prepare(cells, P, sc), market: app.marketPath() }));
-      if (memo.size > 24) memo.delete(memo.keys().next().value);
+      const sc = SCENARIOS[app.scenario], market = app.marketPath();
+      const needsBase = phx && P.rateMode !== 'taylor' && market?.curve?.length;
+      const base = needsBase ? app.sim(false, override) : null;
+      memo.set(key, simulate(cells, P, sc, { phx, prep: prepare(cells, P, sc), market, wantBase: !phx, ...(base ? { base: base.baseArrays } : {}) }));
+      while (memo.size > 96) memo.delete(memo.keys().next().value);
     }
     return memo.get(key);
   };
+  // Runs that are not needed for what is on screen yet — the other scenarios, the regimes of the comparison
+  // table — are solved in a worker and put with the kept runs when they arrive. The page itself is never
+  // held up by them, so a click is answered at once.
+  let solver = null, jobSeq = 0;
+  const jobs = new Map();
+  const startSolver = () => {
+    if (solver) return solver;
+    solver = globalThis.PHX_MC_SRC ? new Worker(URL.createObjectURL(new Blob([globalThis.PHX_MC_SRC], { type: 'text/javascript' }))) : new Worker(new URL('mc.js', document.baseURI));
+    solver.onmessage = ({ data }) => {
+      const job = jobs.get(data.id);
+      if (!job) return;
+      jobs.delete(data.id);
+      // The economies of a run are the page's own objects, as in a run solved here.
+      data.on.cells = data.off.cells = job.cells;
+      memo.set(job.keys[0], data.on); memo.set(job.keys[1], data.off);
+      while (memo.size > 96) memo.delete(memo.keys().next().value);
+      job.done(true);
+    };
+    solver.onerror = () => { for (const job of jobs.values()) job.done(false); jobs.clear(); solver = null; };
+    return solver;
+  };
+  // Resolves when the pair of runs (with and without Phoenix) for that scenario and parameter change is kept.
+  app.solveAhead = (scenario = app.scenario, override) => new Promise(done => {
+    if (typeof Worker === 'undefined' || !SCENARIOS[scenario]) return done(false);
+    const current = app.scenario;
+    let job = null;
+    app.scenario = scenario;
+    try {
+      const P = { ...app.effParams(), ...(override || {}) }, cells = app.simCells();
+      const key = phx => JSON.stringify([app.region, app.scenario, phx, P, app.dataStamp, app.data.weoVintages ? 1 : 0]);
+      if (!cells.length || (SCENARIOS[scenario].asOf && !app.weoVintages)) return done(false);
+      if (memo.has(key(true)) && memo.has(key(false))) return done(true);
+      job = { keys: [key(true), key(false)], cells, done, send: { job: 'pair', cells, P, scenario: SCENARIOS[scenario], market: app.marketPath() } };
+    } catch { return done(false); } finally { app.scenario = current; }
+    const id = ++jobSeq;
+    jobs.set(id, job);
+    try { startSolver().postMessage({ ...job.send, id }); } catch { jobs.delete(id); done(false); }
+  });
+  // The other scenarios, prepared a few seconds after the page has come to rest.
+  let warming = 0;
+  app.warmScenarios = () => {
+    clearTimeout(warming);
+    warming = setTimeout(() => { if (document.visibilityState === 'visible' && !app.refreshing) for (const k of Object.keys(SCENARIOS)) if (k !== app.scenario) app.solveAhead(k); }, 2500);
+  };
 
   app.setRegion = r => { if (!REGIONS[r]) return; app.region = r; persist(); rebuild(); emit(); nowcast().then(signalPass); };
-  app.setScenario = sc => { if (!SCENARIOS[sc]) return; app.scenario = sc; persist(); memo.clear(); emit(); if (SCENARIOS[sc].asOf) app.ensureVintages(); };
+  app.setScenario = sc => { if (!SCENARIOS[sc]) return; app.scenario = sc; persist(); emit(); if (SCENARIOS[sc].asOf) app.ensureVintages(); };
   // IMF forecast vintages (2009–2025) for scenarios built on the data of a past date (§7.2), loaded on demand.
   app.ensureVintages = async () => {
     if (app.weoVintages || app.loadingVintages) return;

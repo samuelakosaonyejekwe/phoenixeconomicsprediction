@@ -16,6 +16,15 @@ function chol(A) { const n = A.length, L = A.map(() => new Array(n).fill(0)); fo
 const gauss = r => Math.sqrt(-2 * Math.log(1 - r())) * Math.cos(2 * Math.PI * r());
 
 self.onmessage = ({ data }) => {
+  // A pair of runs for the page, with and without Phoenix, solved here so that the page stays free. The run
+  // without Phoenix is also the baseline of the run with it (as in the page's own solve).
+  if (data.job === 'pair') {
+    const { cells, P, scenario, market, id } = data, prep = prepare(cells, P, scenario);
+    const off = simulate(cells, P, scenario, { phx: false, prep, market, wantBase: true });
+    const on = simulate(cells, P, scenario, { phx: true, prep, market, ...(P.rateMode !== 'taylor' && market?.curve?.length ? { base: off.baseArrays } : {}) });
+    self.postMessage({ job: 'pair', id, on, off });
+    return;
+  }
   // Runs `from` to `to` of `runs`: several workers share one stress test. With `raw` each run is
   // sent as it finishes, for the page to merge; otherwise the runs are summarised here.
   const { cells, P, scenario, runs, seed, market, oilYoy, paramUncertainty = true, est = null, kStanceAlt = null, from = 0, to = runs, raw = false, phase = 0 } = data;

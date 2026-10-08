@@ -111,7 +111,9 @@ export function lineChart({ series, bands = [], height = 220, yFmt = v => num(v,
 
   onResize(host, (W, extra = 0) => {
     clear(host);
-    const m = { l: 46, r: 12, t: 10, b: 24 }, H = height + extra;
+    // The margins are as wide as the labels that stand in them: the longest figure of the scale on the
+    // left, half of the last label of the horizontal axis on the right.
+    const m = { l: Math.max(46, Math.max(...ticks.map(t => String(yFmt(t)).length)) * 6.7 + 12), r: Math.max(12, String(xFmt(x1)).length * 3.4 + 4), t: 10, b: 24 }, H = height + extra;
     const X = v => m.l + (v - x0) / (x1 - x0) * (W - m.l - m.r);
     const Y = v => m.t + (1 - (v - lo) / (hi - lo)) * (H - m.t - m.b);
     const svg = s('svg', { width: W, height: H, viewBox: `0 0 ${W} ${H}`, class: 'svg' });
@@ -129,14 +131,37 @@ export function lineChart({ series, bands = [], height = 220, yFmt = v => num(v,
       const top = b.values.map(v => `${X(v[0])},${Y(v[2])}`), bot = b.values.slice().reverse().map(v => `${X(v[0])},${Y(v[1])}`);
       svg.append(s('polygon', { points: [...top, ...bot].join(' '), style: { fill: b.color, opacity: b.opacity ?? 0.14 } }));
     }
+    // A label is written where no curve passes: each place it could go is tried against the drawn paths
+    // (and the labels already written), and the first free one is taken.
+    const paths = [...series.map(se => se.values.map(v => [X(v[0]), Y(v[1])])), ...bands.flatMap(b => [b.values.map(v => [X(v[0]), Y(v[1])]), b.values.map(v => [X(v[0]), Y(v[2])])])];
+    const taken = [];
+    const free = (xa, ya, xb, yb) => xa >= m.l - 1 && xb <= W - 2 && ya >= 0 && yb <= H - m.b + 1
+      && !taken.some(t => xa < t[2] && xb > t[0] && ya < t[3] && yb > t[1])
+      && !paths.some(pts => pts.some((p, k) => {
+        if (p[0] >= xa && p[0] <= xb && p[1] >= ya && p[1] <= yb) return true;
+        const q = pts[k + 1];
+        if (!q || Math.max(p[0], q[0]) < xa || Math.min(p[0], q[0]) > xb) return false;
+        // The segment, sampled across the box: a steep line can cross it between two points.
+        for (let f = 0.1; f < 1; f += 0.1) { const x = p[0] + (q[0] - p[0]) * f, y = p[1] + (q[1] - p[1]) * f; if (x >= xa && x <= xb && y >= ya && y <= yb) return true; }
+        return false;
+      }));
+    const label = (text, places) => {
+      const w = String(text).length * 6.4 + 6;
+      const spot = places.map(([x, y, anchor]) => ({ x, y, anchor, box: anchor === 'end' ? [x - w, y - 11, x + 2, y + 3] : [x - 2, y - 11, x + w, y + 3] })).find(c => free(...c.box));
+      if (!spot) return;   // nowhere free: the value is in the tooltip and the table
+      taken.push(spot.box);
+      svg.append(s('text', { x: spot.x, y: spot.y, class: 'ref-t', 'text-anchor': spot.anchor }, text));
+    };
     for (const r of refs) {
       svg.append(s('line', { x1: m.l, x2: W - m.r, y1: Y(r.y), y2: Y(r.y), class: 'ref' }));
-      svg.append(s('text', { x: W - m.r - 4, y: Y(r.y) - 5, class: 'ref-t', 'text-anchor': 'end' }, r.label));
+      const y = Y(r.y), xs3 = [[W - m.r - 4, 'end'], [m.l + 6, 'start'], [(m.l + W - m.r) / 2 + 40, 'end'], [(m.l + W - m.r) / 2 - 40, 'start']];
+      if (r.label) label(r.label, xs3.flatMap(([x, anchor]) => [[x, y - 5, anchor], [x, y + 13, anchor]]));
     }
     for (const v of vlines) {
       if (v.x < x0 || v.x > x1) continue;
       svg.append(s('line', { x1: X(v.x), x2: X(v.x), y1: m.t, y2: H - m.b, class: 'ref' }));
-      if (v.label) svg.append(s('text', { x: X(v.x) + 4, y: m.t + 10, class: 'ref-t' }, v.label));
+      const x = X(v.x), ys = [m.t + 10, H - m.b - 6, (m.t + H - m.b) / 2];
+      if (v.label) label(v.label, ys.flatMap(y => [[x + 4, y, 'start'], [x - 4, y, 'end']]));
     }
     svg.append(s('line', { x1: m.l, x2: W - m.r, y1: H - m.b, y2: H - m.b, class: 'axis' }));
     for (const se of series) {
@@ -193,9 +218,9 @@ export function lineChart({ series, bands = [], height = 220, yFmt = v => num(v,
         const strip = s('svg', { width: W, height: h2, class: 'svg gap-svg', 'aria-hidden': 'true' });
         strip.append(s('line', { x1: m.l, x2: W - m.r, y1: Y2(0), y2: Y2(0), class: 'grid' }),
           s('path', { d: ds.map((p, k) => `${k ? 'L' : 'M'}${X(p[0]).toFixed(1)},${Y2(p[1]).toFixed(1)}`).join(''), class: 'line' }),
-          // The scale is written inside the strip, at its left edge: a long figure cannot reach outside the card.
-          s('text', { x: m.l + 4, y: Y2(dHi) + (dHi === 0 ? -4 : 10), class: 'tick' }, dHi === 0 ? '0' : small(dHi, 4)),
-          s('text', { x: m.l + 4, y: Y2(dLo) + (dLo === 0 ? 10 : -4), class: 'tick' }, dLo === 0 ? '0' : small(dLo, 4)));
+          // The scale is written in the margin left of the strip, beside it and never on it; a long figure is
+          // fitted to the margin, so it cannot reach outside the card either.
+          ...[dHi, dLo].map(v => { const t = v === 0 ? '0' : small(v, 4); return s('text', { x: m.l - 6, y: Y2(v) + 4, class: 'tick', 'text-anchor': 'end', ...(t.length > 6 ? { textLength: m.l - 10, lengthAdjust: 'spacingAndGlyphs' } : {}) }, t); }));
         host.append(h('p', { class: 'chart-cap' }, 'The difference on its own scale'), strip);
       }
     }
@@ -296,12 +321,16 @@ export function dotMap({ cells, value, color, fmt, size = c => c.gdp, onSelect }
     for (let lon = -150; lon <= 150; lon += 30) svg.append(s('line', { x1: X(lon), x2: X(lon), y1: 0, y2: H, class: 'grid' }));
     svg.append(s('line', { x1: 0, x2: W, y1: Y(0), y2: Y(0), class: 'axis' }));
     const sorted = [...cells].sort((a, b) => size(b) - size(a));
+    // A name is written under its economy only where it does not fall on a name already written (the
+    // largest economies first); every economy names itself on hover and focus.
+    const names = [];
+    const room = (x, y, text) => { const w = String(text).length * 6.6 + 4, box = [x - w / 2, y - 10, x + w / 2, y + 2]; if (names.some(t => box[0] < t[2] && box[2] > t[0] && box[1] < t[3] && box[3] > t[1])) return false; names.push(box); return true; };
     for (const c of sorted) {
       const v = value(c), r = 4 + 16 * Math.sqrt(size(c) / maxS);
       const g = s('g', { class: 'dotg', tabindex: 0, role: 'button', 'aria-label': `${c.name}: ${fmt(v)}` },
         s('circle', { cx: X(c.lon), cy: Y(c.lat), r: Math.max(8, r), fill: 'transparent' }),
         s('circle', { cx: X(c.lon), cy: Y(c.lat), r, class: 'bubble', style: { fill: color(v, c) } }),
-        W > 380 ? s('text', { x: X(c.lon), y: Y(c.lat) + r + 11, class: 'tick', 'text-anchor': 'middle' }, c.id) : null);
+        W > 380 && room(X(c.lon), Y(c.lat) + r + 11, c.id) ? s('text', { x: X(c.lon), y: Y(c.lat) + r + 11, class: 'tick', 'text-anchor': 'middle' }, c.id) : null);
       g.addEventListener('pointermove', e => showTip(e.clientX, e.clientY, [{ value: fmt(v), label: c.name }]));
       g.addEventListener('pointerleave', hideTip);
       g.addEventListener('click', () => onSelect?.(c));

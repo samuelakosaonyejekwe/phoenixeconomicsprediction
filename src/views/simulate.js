@@ -8,7 +8,8 @@ import { paperResults } from '../data/paper.js';
 import { pageHead, explain, kpi, empty, objectiveChips, openCountry } from './common.js';
 import { slider } from './controls.js';
 
-let frame = null, field = 'pi', playing = null, openGroup = 'absorb', mcResult = null, mcKey = '', mcRun = null, mcBtnRef = null, mcShown = '', mcWant = '', mcWarm = 0, mcDraw = null;
+let frame = null, field = 'pi', playing = null, openGroups = new Set(['absorb']), mcResult = null, mcKey = '', mcRun = null, mcBtnRef = null, mcShown = '', mcWant = '', mcWarm = 0, mcDraw = null, regWant = '';
+const regDone = new Set();
 // The k_A search result survives redraws (data refreshes, status updates) while its inputs are unchanged.
 let kaResult = null, kaKey = '', kaBusy = '', kaData = '', kaTimer = 0, kaReveal = false, mcReveal = false, mcData = '';
 // The stress test runs on every processor core at once: its runs are shared among workers and merged
@@ -95,12 +96,13 @@ export function simulate(root, app) {
   // Scenario + parameter panel.
   const scen = h('div', { class: 'scen' }, Object.entries(SCENARIOS).map(([k, s]) =>
     h('button', { class: ['scen-b', app.scenario === k && 'on'], 'aria-pressed': String(app.scenario === k), 'data-tip': `${s.desc} Select to start the simulation from this case.`, onclick: () => app.setScenario(k) }, h('b', null, s.label), h('small', null, s.desc))));
+  // Every group the reader has opened is drawn open, with its controls, when the page is redrawn.
   // A group's controls exist only while it is open: sliders left inside a folded group are still met by
   // a screen reader, as nameless "value indicators".
   const groups = h('div', { class: 'acc' }, PARAM_GROUPS.map(g => {
     const body = h('div', { class: 'ctrl-grid' }), fillGroup = () => { if (!body.firstChild) body.append(...g.params.map(p => slider(app, { ...p, def: p.def }))); };
-    if (openGroup === g.id) fillGroup();
-    return h('details', { open: openGroup === g.id, ontoggle: e => { if (e.target.open) { openGroup = g.id; fillGroup(); } else body.replaceChildren(); } },
+    if (openGroups.has(g.id)) fillGroup();
+    return h('details', { open: openGroups.has(g.id), ontoggle: e => { if (e.target.open) { openGroups.add(g.id); fillGroup(); } else { openGroups.delete(g.id); body.replaceChildren(); } } },
       h('summary', null, h('b', null, g.title), g.pde.length ? h('small', null, g.pde.join(' · ')) : null), body);
   }));
 
@@ -147,20 +149,39 @@ export function simulate(root, app) {
   const fieldSel = h('select', { 'aria-label': 'Field', onchange: e => { field = e.target.value; app.rerender(); } }, Object.entries(FIELDS).map(([k, f]) => h('option', { value: k, selected: k === field }, f.label)));
   drawMap();
 
-  // Regime comparison (Solutions §7.4, Table 13), recomputed for the selected economies.
-  const regimes = [
-    ['No Phoenix', app.sim(false)],
-    ['Phoenix (current settings)', sim],
-    ['Faster absorption k_A × 3', app.sim(true, { kA: Math.min(1, P.kA * 3) })],
-    ['Cap 3% of GDP a year', app.sim(true, { capPct: 3 })],
-    ['Government spending rate 0.2', app.sim(true, { sdGov: 0.2 })],
-    ['Steep Phillips curve κ = 0.25 (tight labour markets)', app.sim(true, { kappaPC: 0.25 })],
-    ['Release at the trigger instead of the target', app.sim(true, { piRel: P.piTh })],
+  // Regime comparison (Solutions §7.4, Table 13), recomputed for the selected economies. Its further runs
+  // are solved off the page and the table filled in when they arrive: the charts do not wait for them. Once solved they are kept, and the table is drawn with the page.
+  const REGIMES = [
+    ['No Phoenix', null, false],
+    ['Phoenix (current settings)', null, true],
+    ['Faster absorption k_A × 3', { kA: Math.min(1, P.kA * 3) }, true],
+    ['Cap 3% of GDP a year', { capPct: 3 }, true],
+    ['Government spending rate 0.2', { sdGov: 0.2 }, true, true],
+    ['Steep Phillips curve κ = 0.25 (tight labour markets)', { kappaPC: 0.25 }, true, true],
+    ['Release at the trigger instead of the target', { piRel: P.piTh }, true],
   ];
-  const noPhx = { 'Government spending rate 0.2': app.sim(false, { sdGov: 0.2 }), 'Steep Phillips curve κ = 0.25 (tight labour markets)': app.sim(false, { kappaPC: 0.25 }) };
+  const regKey = JSON.stringify([app.region, app.scenario, P, app.dataStamp]);
+  const regimeRows = () => REGIMES.map(([name, over, phx, ownBase]) => {
+    const r = app.sim(phx, over), e = r.agg.at(-1), b = (ownBase ? app.sim(false, over) : base).agg.at(-1);
+    return h('tr', null, h('th', { scope: 'row' }, name), h('td', null, pct(e.pi, 2)), h('td', null, small(e.pi - b.pi, 4)), h('td', null, pct(e.i, 2)), h('td', null, eur(e.S, 1)), h('td', null, eur(r.totals.absorbed, 1)), h('td', null, num(e.D, 2)));
+  });
+  const regimeBody = h('tbody');
   const regimeTable = h('div', { class: 'tbl-wrap' }, h('table', { class: 'tbl' },
     h('thead', null, h('tr', null, ['Regime', `π at m${P.months}`, 'Δπ vs no Phoenix, pp', `Policy rate at m${P.months}`, `Excess stock at m${P.months}`, 'Absorbed', `Disorder at m${P.months}`].map(c => h('th', { scope: 'col' }, c)))),
-    h('tbody', null, regimes.map(([name, r]) => { const e = r.agg.at(-1), b = (noPhx[name] || base).agg.at(-1); return h('tr', null, h('th', { scope: 'row' }, name), h('td', null, pct(e.pi, 2)), h('td', null, small(e.pi - b.pi, 4)), h('td', null, pct(e.i, 2)), h('td', null, eur(e.S, 1)), h('td', null, eur(r.totals.absorbed, 1)), h('td', null, num(e.D, 2))); }))));
+    regimeBody));
+  regWant = regKey;
+  if (regDone.has(regKey)) regimeBody.append(...regimeRows());
+  else {
+    // The rows are there from the start, with their names, so that nothing below moves when the figures arrive.
+    regimeBody.append(...REGIMES.map(([name], k) => h('tr', null, h('th', { scope: 'row' }, name), h('td', { colspan: 6, class: 'muted', ...(k ? {} : { role: 'status' }) }, k ? '…' : 'Solving the seven regimes…'))));
+    // Solved off the page (app.solveAhead); should that not be possible, here, once the page has been shown.
+    Promise.all(REGIMES.filter(r => r[1]).map(r => app.solveAhead(app.scenario, r[1]))).then(() => new Promise(r => setTimeout(r, 30))).then(() => {
+      if (regWant !== regKey) return;
+      regDone.add(regKey); if (regDone.size > 40) regDone.delete(regDone.values().next().value);
+      if (regimeBody.isConnected) regimeBody.replaceChildren(...regimeRows()); else app.rerender();
+    });
+  }
+  app.warmScenarios();
 
   // Optimiser: k_A feasibility, economy by economy (§4.3–4.4).
   const optIntro = h('p', { class: 'sub' }, `Finds the economies that would still hold an exceptional stock (above their own S_crit) at month ${P.months} without absorption, the smallest absorption speed k_A that brings each of them down to its threshold, and what stops the others. The loss-minimising policy over all levers is in Solutions §7.6 (Table 15).`);

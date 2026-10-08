@@ -194,7 +194,7 @@ select { border: 1px solid var(--line-2); background: var(--surface); border-rad
 .dot { stroke: var(--surface); stroke-width: 2; }
 .cross { stroke: var(--ink-2); stroke-width: 1; }
 .ref { stroke: var(--ink-2); stroke-width: 1; opacity: .5; }
-.ref-t { fill: var(--ink-2); font-size: 11px; }
+.ref-t { fill: var(--ink-2); font-size: 11px; paint-order: stroke; stroke: var(--surface); stroke-width: 3px; stroke-linejoin: round; }
 .cell { stroke: none; }
 .cell:hover { stroke: var(--ink); stroke-width: 1.5; }
 .bubble { stroke: var(--surface); stroke-width: 2; }
